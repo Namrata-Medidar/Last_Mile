@@ -1,0 +1,13 @@
+REVOKE EXECUTE ON FUNCTION public.audit_row() FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.auto_assign_on_create() FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.booking_lifecycle() FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.comment_notify() FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engineer_role_sync() FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.pick_engineer(uuid) FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.assign_engineer(uuid) FROM public, anon;
+REVOKE EXECUTE ON FUNCTION public.engineer_job_action(uuid, text) FROM public, anon;
+REVOKE EXECUTE ON FUNCTION public.rate_booking(uuid, integer, text) FROM public, anon;
+REVOKE EXECUTE ON FUNCTION public.set_my_availability(boolean) FROM public, anon;
+REVOKE EXECUTE ON FUNCTION public.my_engineer_id() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.assign_engineer(uuid), public.engineer_job_action(uuid, text), public.rate_booking(uuid, integer, text), public.set_my_availability(boolean), public.my_engineer_id(), public.has_role(uuid, public.app_role), public.is_staff(uuid) TO authenticated;
