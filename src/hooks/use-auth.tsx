@@ -7,6 +7,7 @@ import { isStaff, type AppRole } from "@/services/authService";
 
 type AuthState = {
   ready: boolean;
+  rolesReady: boolean;
   session: Session | null;
   userId: string | null;
   email: string | null;
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         ready,
+        rolesReady: !userId || !roles.isLoading,
         session,
         userId,
         email: session?.user.email ?? null,

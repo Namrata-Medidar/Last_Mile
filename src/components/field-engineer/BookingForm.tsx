@@ -39,10 +39,11 @@ type BookingFormProps = {
     contacts: PointOfContact[];
     issueDescription: string;
     workInstructions: string;
-  }) => void;
+  }) => void | Promise<void>;
 };
 
 export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
+  const [submitting, setSubmitting] = useState(false);
   const [customerType, setCustomerType] = useState<"existing" | "new">("existing");
   const [level, setLevel] = useState<EngineerLevel | "">("");
   const [count, setCount] = useState(1);
@@ -207,28 +208,33 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
         </div>
         <div className="flex items-center gap-4 border-t border-border pt-3 sm:border-t-0 sm:border-l sm:pl-4 sm:pt-0">
           <div><p className="text-[10px] text-muted-foreground">Total payable</p><p className="text-lg font-semibold text-primary">{quote ? money(quote.total) : "—"}</p></div>
-          <Button disabled={!validDates || !validSite || !issueDescription.trim() || !level || !priority || !hours || !quote} onClick={() => {
+          <Button disabled={submitting || !validDates || !validSite || !issueDescription.trim() || !level || !priority || !hours || !quote} onClick={async () => {
             if (!validDates || !validSite || !issueDescription.trim() || !level || !priority || !hours || !quote) return;
-            onSubmit({
-            customerType,
-            level,
-            count,
-            priority,
-            total: quote.subTotal,
-            gst: quote.gst,
-            totalPayable: quote.total,
-            start_date: startDate,
-            end_date: endDate,
-            duration: hours === 4 ? "4-hour" : "full-day",
-            hours,
-            startTime,
-            gpsLocation,
-            site,
-            contacts: pocs,
-            issueDescription: issueDescription.trim(),
-            workInstructions: workInstructions.trim()
-            });
-          }}>Book service</Button>
+            setSubmitting(true);
+            try {
+              await onSubmit({
+                customerType,
+                level,
+                count,
+                priority,
+                total: quote.subTotal,
+                gst: quote.gst,
+                totalPayable: quote.total,
+                start_date: startDate,
+                end_date: endDate,
+                duration: hours === 4 ? "4-hour" : "full-day",
+                hours,
+                startTime,
+                gpsLocation,
+                site,
+                contacts: pocs,
+                issueDescription: issueDescription.trim(),
+                workInstructions: workInstructions.trim(),
+              });
+            } finally {
+              setSubmitting(false);
+            }
+          }}>{submitting ? "Saving booking…" : "Book service"}</Button>
         </div>
       </div>
     </section>

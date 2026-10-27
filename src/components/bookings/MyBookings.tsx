@@ -6,6 +6,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Too
 import { panel } from "@/components/common/ui";
 import { Button } from "@/components/ui/button";
 import { RateJob } from "./RateJob";
+import type { CommentsByTicket, Ticket, TicketUpdate } from "@/services/bookingService";
 
 const tickets = [
   { id: "FE-2026-00124", title: "Connectivity down at Pune Store 24", status: "In Progress", priority: "Urgent", engineer: "Rajesh Kumar", updated: "2 min ago", city: "Pune", customer: "Airtel Business", progress: 68, unreadComments: 2 },
@@ -80,13 +81,13 @@ function TicketTabs({ activeTab, setActiveTab, attachments, isTeam }) {
   return <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Ticket workspace">{tabs.filter((tab) => isTeam || tab.id !== "internal").map(({ id, label, icon: Icon }) => <button key={id} type="button" role="tab" aria-selected={activeTab === id} onClick={() => setActiveTab(id)} className={`flex h-8 shrink-0 items-center gap-1.5 rounded px-2 text-[10px] font-semibold ${activeTab === id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-surface hover:text-foreground"}`}><Icon className="h-3 w-3" />{label}{id === "attachments" && <span className="rounded bg-surface px-1 text-[9px]">{attachments.length}</span>}</button>)}</div>;
 }
 
-function Conversation({ channel, messages, draft, setDraft, onSend, onAttach, activeTab, setActiveTab, attachments, isTeam }) {
+function Conversation({ channel, messages, draft, setDraft, onSend, onAttach, activeTab, setActiveTab, attachments, isTeam, canEdit = true }) {
   const internal = channel === "internal";
   return <div className="p-4">
       <div className="h-[470px] space-y-3 overflow-y-auto rounded-md border border-border bg-surface/35 p-4">
         {messages.map((message, index) => <div key={`${message.time}-${index}`} className={message.sender === "You" ? "text-right" : ""}><p className="text-[10px] text-muted-foreground">{message.sender} · {message.role} · {message.time}</p><p className={`mt-1 inline-block max-w-[85%] rounded-md px-3 py-2 text-left text-xs leading-5 ${message.sender === "You" ? "bg-primary text-primary-foreground" : "bg-surface"}`}>{message.text}</p></div>)}
       </div>
-      <div className="mt-3 border-t border-border pt-2"><TicketTabs activeTab={activeTab} setActiveTab={setActiveTab} attachments={attachments} isTeam={isTeam} /><div className="mt-2 flex gap-2"><Button size="icon" variant="outline" onClick={onAttach} aria-label="Attach file"><Paperclip /></Button><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && onSend()} placeholder={internal ? "Add a private note" : "Reply to customer and engineer"} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-xs outline-none focus:border-ring" /><Button size="icon" onClick={onSend} aria-label="Send message"><Send /></Button></div></div>
+      <div className="mt-3 border-t border-border pt-2"><TicketTabs activeTab={activeTab} setActiveTab={setActiveTab} attachments={attachments} isTeam={isTeam} /><div className="mt-2 flex gap-2">{canEdit ? <><Button size="icon" variant="outline" onClick={onAttach} aria-label="Attach file"><Paperclip /></Button><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && onSend()} placeholder={internal ? "Add a private note" : "Reply to customer and engineer"} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-xs outline-none focus:border-ring" /><Button size="icon" onClick={onSend} aria-label="Send message"><Send /></Button></> : <p className="py-2 text-xs text-muted-foreground">You have view-only access to this ticket.</p>}</div></div>
   </div>;
 }
 
@@ -139,7 +140,43 @@ function ProjectDashboard({ allTickets }) {
   </section>;
 }
 
-export function MyBookings({ onBack, customerTickets = [], mode = "customer", showDashboard = false, showTickets = true, onNotify, onUpdateTicket, onComment, comments, loading = false }) {
+export function MyBookings({
+  onBack,
+  customerTickets = [],
+  mode = "customer",
+  showDashboard = false,
+  showTickets = true,
+  onNotify,
+  onUpdateTicket,
+  onComment,
+  canEditTickets = true,
+  canAddAssignee = false,
+  canCloseTicket = false,
+  comments,
+  loading = false,
+}: {
+  onBack: () => void;
+  customerTickets?: Ticket[];
+  mode?: "customer" | "team";
+  showDashboard?: boolean;
+  showTickets?: boolean;
+  onNotify?: (notification: { title: string; detail: string }) => void;
+  onUpdateTicket?: (
+    ticketNo: string,
+    update: TicketUpdate,
+    action?: "edit" | "assignee" | "close",
+  ) => Promise<boolean> | boolean | void;
+  onComment?: (
+    ticketNo: string,
+    visibility: "public" | "internal",
+    text: string,
+  ) => void;
+  canAddAssignee?: boolean;
+  canCloseTicket?: boolean;
+  canEditTickets?: boolean;
+  comments?: CommentsByTicket | undefined;
+  loading?: boolean;
+}) {
   const isTeam = mode === "team";
   const allTickets = customerTickets;
   const [selectedRaw, setSelected] = useState(null);
@@ -180,19 +217,31 @@ export function MyBookings({ onBack, customerTickets = [], mode = "customer", sh
     setAssigneePhone(ticket.assigneePhone ?? "");
     setReadTicketIds((current) => current.includes(ticket.id) ? current : [...current, ticket.id]);
   };
-  const updateTicket = (update) => { setTicketUpdates((current) => ({ ...current, [selected.id]: { ...current[selected.id], ...update } })); onUpdateTicket?.(selected.id, update); };
+  const updateTicket = async (update, action = "edit") => {
+    if (
+      isTeam &&
+      ((action === "edit" && !canEditTickets) ||
+        (action === "assignee" && !canAddAssignee) ||
+        (action === "close" && !canCloseTicket))
+    ) return false;
+    setTicketUpdates((current) => ({ ...current, [selected.id]: { ...current[selected.id], ...update } }));
+    const saved = await onUpdateTicket?.(selected.id, update, action);
+    return saved !== false;
+  };
   const recordCall = () => {
     updateTicket({ lastContact: "Customer called just now" });
     onComment?.(selected.id, "public", "We contacted the site POC to confirm access and visit availability.");
     onNotify?.({ title: "Ticket updated", detail: `${selected.id} · Customer call recorded` });
   };
   const send = () => {
+    if (isTeam && !canEditTickets) return;
     if (!draft.trim()) return;
     onComment?.(selected.id, isTeam ? activeTab : "public", draft.trim());
     onNotify?.({ title: activeTab === "internal" ? "Internal note added" : "New public reply", detail: `${selected.id} · ${draft.trim()}` });
     setDraft("");
   };
   const addFiles = (event) => {
+    if (isTeam && !canEditTickets) return;
     const files = Array.from(event.target.files ?? []);
     setAttachments((current) => [...files.map((file) => ({ name: file.name, type: "New upload", size: `${Math.max(file.size / 1024, 1).toFixed(0)} KB`, by: "You", time: "Now" })), ...current]);
     event.target.value = "";
@@ -217,12 +266,61 @@ export function MyBookings({ onBack, customerTickets = [], mode = "customer", sh
           </div>
           {selectedTicket.dbId && <div className="flex justify-end border-b border-border px-4 py-2"><Link to="/invoice/$id" params={{ id: selectedTicket.dbId }} className="text-xs font-semibold text-primary hover:underline">View invoice &amp; payments</Link></div>}
           {!isTeam && selectedTicket.status === "Closed" && selectedTicket.dbId && <RateJob dbId={selectedTicket.dbId} rated={selectedTicket.rating} />}
-          {isTeam && <div className="grid gap-3 border-b border-border p-4 md:grid-cols-[1fr_1fr_auto]"><label><span className="mb-1 block text-[10px] font-semibold uppercase text-muted-foreground">Assignee name</span><input value={assigneeName} onChange={(event) => setAssigneeName(event.target.value)} placeholder="Engineer name" className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs outline-none focus:border-ring" /></label><label><span className="mb-1 block text-[10px] font-semibold uppercase text-muted-foreground">Assignee phone no</span><input value={assigneePhone} onChange={(event) => setAssigneePhone(event.target.value)} placeholder="Phone number" className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs outline-none focus:border-ring" /></label><Button className="self-end" size="sm" onClick={() => { updateTicket({ engineer: assigneeName.trim() || "Unassigned", assigneePhone: assigneePhone.trim(), status: assigneeName.trim() ? "In Progress" : selectedTicket.status, progress: assigneeName.trim() ? Math.max(selectedTicket.progress, 45) : selectedTicket.progress }); onNotify?.({ title: "Assignee updated", detail: `${selected.id} · ${assigneeName.trim() || "Unassigned"}` }); }}><Users />Save assignee</Button></div>}
+          {isTeam && canAddAssignee && (
+            <div className="grid gap-3 border-b border-border p-4 md:grid-cols-[1fr_1fr_auto]">
+              <label>
+                <span className="mb-1 block text-[10px] font-semibold uppercase text-muted-foreground">Assignee name</span>
+                <input value={assigneeName} onChange={(event) => setAssigneeName(event.target.value)} placeholder="Engineer name" className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs outline-none focus:border-ring" />
+              </label>
+              <label>
+                <span className="mb-1 block text-[10px] font-semibold uppercase text-muted-foreground">Assignee phone no</span>
+                <input value={assigneePhone} onChange={(event) => setAssigneePhone(event.target.value)} placeholder="Phone number" className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs outline-none focus:border-ring" />
+              </label>
+              <Button className="self-end" size="sm" onClick={async () => {
+                const saved = await updateTicket({
+                  engineer: assigneeName.trim() || "Unassigned",
+                  assigneePhone: assigneePhone.trim(),
+                  status: assigneeName.trim() ? "In Progress" : selectedTicket.status,
+                  progress: assigneeName.trim() ? Math.max(selectedTicket.progress, 45) : selectedTicket.progress,
+                }, "assignee");
+                if (saved) {
+                  onNotify?.({ title: "Assignee updated", detail: `${selected.id} · ${assigneeName.trim() || "Unassigned"}` });
+                }
+              }}>
+                <Users />Save assignee
+              </Button>
+            </div>
+          )}
           {isAssigned && <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary"><UserRound className="h-5 w-5" /></span><div className="min-w-[150px] flex-1"><p className="text-xs font-semibold">{selectedTicket.engineer} <BadgeCheck className="inline h-3.5 w-3.5 text-primary" /></p><p className="mt-1 text-[10px] text-muted-foreground">Field engineer · 4.8 rating · 7 years experience</p></div><Button size="sm" variant="outline"><Phone />Contact engineer</Button></div>}
-          {isTeam && <div className="flex flex-wrap gap-2 border-b border-border p-3"><Button size="sm" variant="outline" onClick={recordCall}><Phone />Record customer call</Button><Button size="sm" variant="outline" onClick={() => { setAssigneeName("Rajesh Kumar"); updateTicket({ engineer: "Rajesh Kumar", status: "In Progress", progress: 45 }); onNotify?.({ title: "Engineer assigned", detail: `${selected.id} · Rajesh Kumar` }); }}><Users />Assign engineer</Button><Button size="sm" onClick={() => { updateTicket({ status: "Closed", progress: 100 }); onNotify?.({ title: "Ticket closed", detail: `${selected.id} · Completed` }); }}><CheckCircle2 />Close ticket</Button></div>}
-          {(activeTab === "public" || (isTeam && activeTab === "internal")) && <Conversation channel={activeTab} messages={selectedMessages[activeTab]} draft={draft} setDraft={setDraft} onSend={send} onAttach={() => fileInputRef.current?.click()} activeTab={activeTab} setActiveTab={setActiveTab} attachments={attachments} isTeam={isTeam} />}
+          {isTeam && (canEditTickets || canAddAssignee || canCloseTicket) && (
+            <div className="flex flex-wrap gap-2 border-b border-border p-3">
+              {canEditTickets && (
+                <Button size="sm" variant="outline" onClick={recordCall}>
+                  <Phone />Record customer call
+                </Button>
+              )}
+              {canAddAssignee && (
+                <Button size="sm" variant="outline" onClick={async () => {
+                  setAssigneeName("Rajesh Kumar");
+                  const saved = await updateTicket({ engineer: "Rajesh Kumar", status: "In Progress", progress: 45 }, "assignee");
+                  if (saved) onNotify?.({ title: "Engineer assigned", detail: `${selected.id} · Rajesh Kumar` });
+                }}>
+                  <Users />Assign engineer
+                </Button>
+              )}
+              {canCloseTicket && selectedTicket.status !== "Closed" && (
+                <Button size="sm" onClick={async () => {
+                  const saved = await updateTicket({ status: "Closed", progress: 100 }, "close");
+                  if (saved) onNotify?.({ title: "Ticket closed", detail: `${selected.id} · Completed` });
+                }}>
+                  <CheckCircle2 />Close ticket
+                </Button>
+              )}
+            </div>
+          )}
+          {(activeTab === "public" || (isTeam && activeTab === "internal")) && <Conversation channel={activeTab} messages={selectedMessages[activeTab]} draft={draft} setDraft={setDraft} onSend={send} onAttach={() => fileInputRef.current?.click()} activeTab={activeTab} setActiveTab={setActiveTab} attachments={attachments} isTeam={isTeam} canEdit={!isTeam || canEditTickets} />}
 
-          {activeTab === "attachments" && <div className="flex min-h-[554px] flex-col p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">Ticket attachments</h3><p className="mt-1 text-xs text-muted-foreground">Photos, work orders, reports, and customer documents.</p></div><Button onClick={() => fileInputRef.current?.click()}><Paperclip />Upload files</Button></div><div className="mt-5 divide-y divide-border rounded-md border border-border">{attachments.map((file, index) => <div key={`${file.name}-${index}`} className="flex items-center gap-3 p-4"><div className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary"><FileText className="h-4 w-4" /></div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.name}</p><p className="mt-1 text-[10px] text-muted-foreground">{file.type} · {file.size} · {file.by} · {file.time}</p></div><Button size="icon" variant="ghost" aria-label={`Download ${file.name}`}><Download /></Button></div>)}</div><div className="mt-auto border-t border-border pt-2"><TicketTabs activeTab={activeTab} setActiveTab={setActiveTab} attachments={attachments} isTeam={isTeam} /></div></div>}
+          {activeTab === "attachments" && <div className="flex min-h-[554px] flex-col p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">Ticket attachments</h3><p className="mt-1 text-xs text-muted-foreground">Photos, work orders, reports, and customer documents.</p></div>{(!isTeam || canEditTickets) && <Button onClick={() => fileInputRef.current?.click()}><Paperclip />Upload files</Button>}</div><div className="mt-5 divide-y divide-border rounded-md border border-border">{attachments.map((file, index) => <div key={`${file.name}-${index}`} className="flex items-center gap-3 p-4"><div className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary"><FileText className="h-4 w-4" /></div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.name}</p><p className="mt-1 text-[10px] text-muted-foreground">{file.type} · {file.size} · {file.by} · {file.time}</p></div><Button size="icon" variant="ghost" aria-label={`Download ${file.name}`}><Download /></Button></div>)}</div><div className="mt-auto border-t border-border pt-2"><TicketTabs activeTab={activeTab} setActiveTab={setActiveTab} attachments={attachments} isTeam={isTeam} /></div></div>}
 
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={addFiles} />
         </section>
@@ -232,4 +330,3 @@ export function MyBookings({ onBack, customerTickets = [], mode = "customer", sh
     </div>}
   </div>;
 }
-
