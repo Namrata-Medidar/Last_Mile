@@ -154,7 +154,7 @@ export const bookingService = {
         customer_name: b.customer?.name || profile.company || null,
         site_address: b.site?.address || profile.address || null,
         city: null,
-        total: Math.max(0, Math.round(b.total)),
+        total: Math.max(0, Math.round(b.totalPayable ?? b.total)),
         details: {
           level: b.level,
           count: b.count,

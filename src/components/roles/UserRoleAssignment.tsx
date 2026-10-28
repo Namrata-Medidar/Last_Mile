@@ -25,12 +25,17 @@ type UserAssignment = {
   id: string;
   user_id: string;
   role_id: string;
+  role: string;
   status: string;
   created_at: string;
 };
 
 type FilterRole = "All Users" | string;
 type RoleDialogAction = "assign" | "revoke" | null;
+
+function assignmentMatchesRole(assignment: UserAssignment, role: AppRole): boolean {
+  return assignment.role_id === role.id || assignment.role === role.slug;
+}
 
 export function UserRoleAssignment() {
   const queryClient = useQueryClient();
@@ -82,7 +87,7 @@ export function UserRoleAssignment() {
     queryFn: async (): Promise<UserAssignment[]> => {
       const { data, error } = await supabase
         .from("user_roles")
-        .select("id, user_id, role_id, status, created_at");
+        .select("id, user_id, role_id, role, status, created_at");
 
       if (error) throw error;
       return (data ?? []) as UserAssignment[];
@@ -97,7 +102,7 @@ export function UserRoleAssignment() {
     for (const assignment of assignments) {
       if (assignment.status !== "active") continue;
 
-      const role = activeRoles.find((item) => item.id === assignment.role_id);
+      const role = activeRoles.find((item) => assignmentMatchesRole(assignment, item));
       if (!role) continue;
 
       const existing = map.get(assignment.user_id) ?? [];
@@ -177,12 +182,13 @@ export function UserRoleAssignment() {
       if (!canRevokeRoles) {
         throw new Error("Missing permission: users.revoke_role");
       }
+      const rolesToRevoke = activeRoles.filter((role) => roleIds.includes(role.id));
       const assignmentIds = assignments
         .filter(
           (assignment) =>
             roleDialogUserIds.includes(assignment.user_id) &&
             assignment.status === "active" &&
-            roleIds.includes(assignment.role_id),
+            rolesToRevoke.some((role) => assignmentMatchesRole(assignment, role)),
         )
         .map((assignment) => assignment.id);
       if (assignmentIds.length === 0) {
@@ -236,7 +242,7 @@ export function UserRoleAssignment() {
               assignments.some(
                 (assignment) =>
                   userIds.includes(assignment.user_id) &&
-                  assignment.role_id === role.id &&
+                  assignmentMatchesRole(assignment, role) &&
                   assignment.status === "active",
               ),
             )
@@ -247,7 +253,7 @@ export function UserRoleAssignment() {
                 assignments.some(
                   (assignment) =>
                     assignment.user_id === userId &&
-                    assignment.role_id === role.id &&
+                    assignmentMatchesRole(assignment, role) &&
                     assignment.status === "active",
                 ),
               ),
@@ -277,7 +283,7 @@ export function UserRoleAssignment() {
     assignments.some(
       (assignment) =>
         roleDialogUserIds.includes(assignment.user_id) &&
-        assignment.role_id === role.id &&
+        assignmentMatchesRole(assignment, role) &&
         assignment.status === "active",
     ),
   );

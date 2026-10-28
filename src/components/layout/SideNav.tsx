@@ -35,7 +35,6 @@ function SideNav({
   canViewFieldEngineer = false,
   canViewUpcomingFeatures = false,
   canViewCustomerPortal = false,
-  canViewProjectTeamPortal = false,
 }: {
   activeService?: string;
   onServiceSelect?: (service: string) => void;
@@ -46,7 +45,6 @@ function SideNav({
   canViewFieldEngineer?: boolean;
   canViewUpcomingFeatures?: boolean;
   canViewCustomerPortal?: boolean;
-  canViewProjectTeamPortal?: boolean;
 }) {
   return (
     <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-3 text-sidebar-foreground lg:flex">
@@ -147,7 +145,7 @@ function SideNav({
         </button>
       )}
 
-      {canUseTeam && canViewProjectTeamPortal && (
+      {canUseTeam && (
         <button
           type="button"
           onClick={() => onRoleChange?.("team")}

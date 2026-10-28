@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { AccountMenu } from "./AccountMenu";
-function TopNav({ crumbs, onBookingsSelect, role, onRoleChange, notifications = [], canUseTeam = false, onNotificationsOpen }) {
+function TopNav({ crumbs, onBookingsSelect, role, onRoleChange, notifications = [], canUseTeam = false, onNotificationsOpen, onNotificationSelect }) {
   const [showNotifications, setShowNotifications] = useState(false);
   return /* @__PURE__ */ jsxs("header", { className: "sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-nav px-4 text-nav-foreground md:px-6", children: [
     /* @__PURE__ */ jsxs(Link, { to: "/", "aria-label": "Last Mile Connect home", className: "flex items-center gap-2", children: [
@@ -57,7 +57,7 @@ function TopNav({ crumbs, onBookingsSelect, role, onRoleChange, notifications = 
       ),
       showNotifications && /* @__PURE__ */ jsx("div", { className: "absolute right-20 top-14 z-50 w-80 rounded-md border border-border bg-card p-3 text-foreground shadow-xl", children: /* @__PURE__ */ jsxs("div", { children: [
         /* @__PURE__ */ jsx("p", { className: "text-xs font-semibold", children: "Notifications" }),
-        /* @__PURE__ */ jsx("div", { className: "mt-2 max-h-72 space-y-2 overflow-y-auto", children: notifications.length ? notifications.map((item) => /* @__PURE__ */ jsxs("div", { className: "rounded-md bg-surface/60 p-2", children: [
+        /* @__PURE__ */ jsx("div", { className: "mt-2 max-h-72 space-y-2 overflow-y-auto", children: notifications.length ? notifications.map((item) => /* @__PURE__ */ jsxs("button", { type: "button", onClick: () => { setShowNotifications(false); onNotificationSelect?.(item); }, className: "w-full rounded-md bg-surface/60 p-2 text-left hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", children: [
           /* @__PURE__ */ jsx("p", { className: "text-xs font-semibold", children: item.title }),
           /* @__PURE__ */ jsx("p", { className: "mt-0.5 text-[10px] text-muted-foreground", children: item.detail })
         ] }, item.id)) : /* @__PURE__ */ jsx("p", { className: "py-5 text-center text-xs text-muted-foreground", children: "No new notifications" }) })

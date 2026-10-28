@@ -277,7 +277,7 @@ export function RolesTable() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
-                        {permissions.can(role.is_active ? "roles.deactivate" : "roles.edit") && (
+                        {permissions.can("roles.edit") && (
                           <button
                             type="button"
                             onClick={() => openEditForm(role)}
@@ -290,7 +290,7 @@ export function RolesTable() {
                           </button>
                         )}
 
-                        {permissions.can("roles.edit") && (
+                        {permissions.can(role.is_active ? "roles.deactivate" : "roles.edit") && (
                           <button
                             type="button"
                             onClick={() => void handleToggleStatus(role)}

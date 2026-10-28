@@ -19,6 +19,7 @@ import {
   notificationService,
   notificationsQuery,
   useNotificationsRealtime,
+  type AppNotification,
 } from "@/services/notificationService";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/usePermission";
@@ -187,7 +188,13 @@ const pageTitles: Record<AppPage, string> = {
   "project-payment": "Payment",
 };
 
-export function App({ page }: { page: AppPage }) {
+export function App({
+  page,
+  targetTicketId,
+}: {
+  page: AppPage;
+  targetTicketId?: string | undefined;
+}) {
   const [category, setCategory] = useState("All");
   const [modal, setModal] = useState<CatalogService | null>(null);
   const [bookingFlow, setBookingFlow] = useState<BookingFlow | null>(null);
@@ -262,11 +269,18 @@ export function App({ page }: { page: AppPage }) {
   };
   const selectRole = (nextRole: string) => {
     if (nextRole === "team") {
-      if (!auth.isStaff) {
-        toast.error("Project team access requires an operations or admin role.");
+      const teamRoute = permissions.can("sidebar.project_team.dashboard.view")
+        ? "project/dashboard"
+        : permissions.can("sidebar.project_team.ticket.view")
+          ? "project/ticket"
+          : permissions.can("sidebar.project_team.role_management.view")
+            ? "admin/role"
+            : null;
+      if (!teamRoute) {
+        toast.error("You don’t have permission to access the Project Team workspace.");
         return;
       }
-      void navigate({ to: "/$", params: { _splat: "project/dashboard" } });
+      void navigate({ to: "/$", params: { _splat: teamRoute } });
       return;
     }
     void navigate({ to: "/" });
@@ -400,6 +414,17 @@ export function App({ page }: { page: AppPage }) {
     }
   };
 
+  const openNotification = (notification: AppNotification) => {
+    if (notification.bookingId) {
+      void navigate({
+        to: "/bookings",
+        search: { ticket: notification.bookingId },
+      });
+      return;
+    }
+    void navigate({ to: "/bookings" });
+  };
+
   const confirmOrder = async () => {
     if (!activeFlow) return;
     setBookingFlow(null);
@@ -416,11 +441,14 @@ export function App({ page }: { page: AppPage }) {
   const showServiceNav = page !== "bookings" && !isProjectPage;
   return (
     <AppShell
-      canUseTeam={auth.isStaff && permissions.can("sidebar.project_team.portal.view")}
+      canUseTeam={
+        permissions.can("sidebar.project_team.dashboard.view") ||
+        permissions.can("sidebar.project_team.ticket.view") ||
+        permissions.can("sidebar.project_team.role_management.view")
+      }
       canViewFieldEngineer={permissions.can("sidebar.field_engineer.view")}
       canViewUpcomingFeatures={permissions.can("sidebar.upcoming_features.view")}
       canViewCustomerPortal={permissions.can("sidebar.customer_portal.view")}
-      canViewProjectTeamPortal={permissions.can("sidebar.project_team.portal.view")}
       crumbs={["Home", pageTitles[page]]}
       activeService={activeService}
       onServiceSelect={selectCategory}
@@ -429,15 +457,14 @@ export function App({ page }: { page: AppPage }) {
       onRoleChange={selectRole}
       projectSection={projectSection}
       onCreateProjectTicket={createSampleTicket}
-      canViewDashboard={
-        permissions.can("sidebar.project_team.dashboard.view") && permissions.can("tickets.view")
-      }
+      canViewDashboard={permissions.can("sidebar.project_team.dashboard.view")}
       canViewTickets={permissions.can("sidebar.project_team.ticket.view")}
       canViewRoles={permissions.can("sidebar.project_team.role_management.view")}
       canViewPayment={permissions.can("sidebar.project_team.finance.view")}
       canCreateTickets={canCreateTickets}
       notifications={notifications}
       onNotificationsOpen={markNotificationsRead}
+      onNotificationSelect={openNotification}
       showServiceNav={showServiceNav}
     >
       {page === "marketplace" && servicesResult.isError && (
@@ -465,6 +492,7 @@ export function App({ page }: { page: AppPage }) {
           loading={ticketsResult.isLoading}
           mode="customer"
           onNotify={addNotification}
+          targetTicketId={targetTicketId}
         />
       )}
       {isProjectPage && (projectSection === "dashboard" || projectSection === "tickets") && (

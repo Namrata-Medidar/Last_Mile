@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BadgeCheck, BarChart3, CalendarDays, CheckCircle2, Clock3, Download, FileText, LockKeyhole, MapPin, MessageSquare, Paperclip, Phone, Plus, ReceiptText, Search, Send, UserRound, Users } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { panel } from "@/components/common/ui";
@@ -154,6 +154,7 @@ export function MyBookings({
   canCloseTicket = false,
   comments,
   loading = false,
+  targetTicketId,
 }: {
   onBack: () => void;
   customerTickets?: Ticket[];
@@ -176,6 +177,7 @@ export function MyBookings({
   canEditTickets?: boolean;
   comments?: CommentsByTicket | undefined;
   loading?: boolean;
+  targetTicketId?: string | undefined;
 }) {
   const isTeam = mode === "team";
   const allTickets = customerTickets;
@@ -194,6 +196,19 @@ export function MyBookings({
   const [messages, setMessages] = useState(startingMessages);
   const [attachments, setAttachments] = useState(startingFiles);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!targetTicketId) return;
+    const targetTicket = allTickets.find(
+      (ticket) => ticket.dbId === targetTicketId || ticket.id === targetTicketId,
+    );
+    if (!targetTicket) return;
+    setSelected(targetTicket);
+    setStatusFilter("All");
+    setPriorityFilter("All");
+    setCustomerFilter("All");
+    setSearch("");
+  }, [allTickets, targetTicketId]);
 
   const counts = useMemo(() => Object.fromEntries(statuses.map(({ label }) => [label, allTickets.filter((ticket) => ticket.status === label).length])), [allTickets]);
   const priorityCounts = useMemo(() => Object.fromEntries(priorities.map((priority) => [priority, allTickets.filter((ticket) => ticket.priority === priority).length])), [allTickets]);

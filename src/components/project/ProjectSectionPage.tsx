@@ -3,12 +3,27 @@ import { App, type AppPage } from "@/components/App";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/usePermission";
 
-const sectionPages: Record<string, { page: AppPage; permission?: string }> = {
-  "/project": { page: "project-dashboard", permission: "tickets.view" },
-  "/project/dashboard": { page: "project-dashboard", permission: "tickets.view" },
-  "/project/ticket": { page: "project-tickets", permission: "tickets.view" },
-  "/admin/role": { page: "project-roles" },
-  "/admin/payment": { page: "project-payment" },
+const sectionPages: Record<string, { page: AppPage; permissions?: string[] }> = {
+  "/project": {
+    page: "project-dashboard",
+    permissions: ["sidebar.project_team.dashboard.view"],
+  },
+  "/project/dashboard": {
+    page: "project-dashboard",
+    permissions: ["sidebar.project_team.dashboard.view"],
+  },
+  "/project/ticket": {
+    page: "project-tickets",
+    permissions: ["sidebar.project_team.ticket.view"],
+  },
+  "/admin/role": {
+    page: "project-roles",
+    permissions: ["sidebar.project_team.role_management.view"],
+  },
+  "/admin/payment": {
+    page: "project-payment",
+    permissions: ["sidebar.project_team.finance.view"],
+  },
 };
 
 export function ProjectSectionPage() {
@@ -21,7 +36,7 @@ export function ProjectSectionPage() {
     throw notFound();
   }
 
-  if (!auth.ready || !auth.rolesReady || (section.permission && permissions.isLoading)) {
+  if (!auth.ready || !auth.rolesReady || permissions.isLoading) {
     return (
       <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
         Checking project access…
@@ -29,7 +44,7 @@ export function ProjectSectionPage() {
     );
   }
 
-  if (section.permission && permissions.error) {
+  if (permissions.error) {
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
         <div>
@@ -51,13 +66,13 @@ export function ProjectSectionPage() {
     );
   }
 
-  if (!auth.isStaff || (section.permission && !permissions.can(section.permission))) {
+  if (section.permissions?.some((permission) => !permissions.can(permission))) {
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
         <div>
           <h1 className="text-xl font-semibold">You don’t have access to this section</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Staff access and the required permission are needed.
+            You need the permission for this Project Team section.
           </p>
           <Link to="/" className="mt-4 inline-block text-sm text-primary underline">
             Back to marketplace

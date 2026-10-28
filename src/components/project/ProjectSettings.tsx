@@ -36,10 +36,18 @@ export function ProjectSettings({ section = "roles", onNotify }: ProjectSettings
     error: permissionError,
     refetch: refetchPermissions,
   } = usePermissions();
+  const canViewRoles =
+    permissionCodes.includes("roles.tab_view") ||
+    permissionCodes.includes("sidebar.project_team.role_management.view");
   const [activeSection, setActiveSection] = useState<SettingsSection>(section);
   const visibleSections = useMemo(
-    () => sections.filter((item) => !item.permission || permissionCodes.includes(item.permission)),
-    [permissionCodes],
+    () =>
+      sections.filter((item) =>
+        item.id === "roles"
+          ? canViewRoles
+          : !item.permission || permissionCodes.includes(item.permission),
+      ),
+    [canViewRoles, permissionCodes],
   );
   const activeSectionIsVisible = visibleSections.some((item) => item.id === activeSection);
 
