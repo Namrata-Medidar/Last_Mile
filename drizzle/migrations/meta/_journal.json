@@ -57,6 +57,20 @@
       "when": 1792232587195,
       "tag": "0007_harden_function_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793125359996,
+      "tag": "0008_booking_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793125359997,
+      "tag": "0009_booking_attachments_rls",
+      "breakpoints": true
     }
   ]
 }

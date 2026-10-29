@@ -1,10 +1,13 @@
 // @ts-nocheck
 import { Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { Activity, BadgeCheck, BarChart3, CalendarDays, CheckCircle2, Clock3, Download, FileText, LockKeyhole, MapPin, MessageSquare, Paperclip, Phone, Plus, ReceiptText, Search, Send, UserRound, Users } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { panel } from "@/components/common/ui";
 import { Button } from "@/components/ui/button";
+import { attachmentService } from "@/services/attachmentService";
+import { toast } from "sonner";
 import { RateJob } from "./RateJob";
 
 const tickets = [
@@ -50,12 +53,6 @@ const startingMessages = {
     internal: [{ sender: "You", role: "Service desk", text: "Check auditor availability for the Noida service area.", time: "10:08 AM" }],
   },
 };
-
-const startingFiles = [
-  { name: "site-photo-router.jpg", type: "Site photo", size: "2.4 MB", by: "Rajesh Kumar", time: "10:31 AM" },
-  { name: "work-order-FE-00124.pdf", type: "Work order", size: "184 KB", by: "Operations", time: "9:55 AM" },
-  { name: "network-diagram.pdf", type: "Technical document", size: "620 KB", by: "Amit Deshpande", time: "9:48 AM" },
-];
 
 const activityData = [
   { time: "09:00", updates: 1 }, { time: "10:00", updates: 4 }, { time: "11:00", updates: 7 },
@@ -155,8 +152,17 @@ export function MyBookings({ onBack, customerTickets = [], mode = "customer", sh
   const [assigneePhone, setAssigneePhone] = useState(allTickets[0]?.assigneePhone ?? "");
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState(startingMessages);
-  const [attachments, setAttachments] = useState(startingFiles);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState(null);
+  const [attachmentActionError, setAttachmentActionError] = useState("");
   const fileInputRef = useRef(null);
+  const queryClient = useQueryClient();
+  const attachmentsQuery = useQuery({
+    queryKey: ["booking-attachments", selected?.dbId],
+    enabled: Boolean(selected?.dbId),
+    queryFn: () => attachmentService.list(selected.dbId),
+  });
+  const attachments = attachmentsQuery.data ?? [];
 
   const counts = useMemo(() => Object.fromEntries(statuses.map(({ label }) => [label, allTickets.filter((ticket) => ticket.status === label).length])), [allTickets]);
   const priorityCounts = useMemo(() => Object.fromEntries(priorities.map((priority) => [priority, allTickets.filter((ticket) => ticket.priority === priority).length])), [allTickets]);
@@ -176,6 +182,7 @@ export function MyBookings({ onBack, customerTickets = [], mode = "customer", sh
   const unreadComments = selected.unreadComments && !readTicketIds.includes(selected.id) ? selected.unreadComments : 0;
   const selectTicket = (ticket) => {
     setSelected(ticket);
+    setAttachmentActionError("");
     setAssigneeName(ticket.engineer === "Unassigned" ? "" : ticket.engineer);
     setAssigneePhone(ticket.assigneePhone ?? "");
     setReadTicketIds((current) => current.includes(ticket.id) ? current : [...current, ticket.id]);
@@ -192,10 +199,58 @@ export function MyBookings({ onBack, customerTickets = [], mode = "customer", sh
     onNotify?.({ title: activeTab === "internal" ? "Internal note added" : "New public reply", detail: `${selected.id} · ${draft.trim()}` });
     setDraft("");
   };
-  const addFiles = (event) => {
+  const addFiles = async (event) => {
     const files = Array.from(event.target.files ?? []);
-    setAttachments((current) => [...files.map((file) => ({ name: file.name, type: "New upload", size: `${Math.max(file.size / 1024, 1).toFixed(0)} KB`, by: "You", time: "Now" })), ...current]);
     event.target.value = "";
+    if (!files.length) return;
+    if (!selectedTicket.dbId) {
+      const message = "Attachments can only be uploaded to a saved booking ticket.";
+      setAttachmentActionError(message);
+      toast.error(message);
+      return;
+    }
+
+    const bookingId = selectedTicket.dbId;
+    setIsUploadingAttachments(true);
+    setAttachmentActionError("");
+    try {
+      const results = await Promise.allSettled(
+        files.map((file) => attachmentService.upload(bookingId, file)),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["booking-attachments", bookingId] });
+      const failures = results.filter((result) => result.status === "rejected");
+      if (failures.length) {
+        const details = failures
+          .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
+          .join(" ");
+        const message = `${failures.length} of ${files.length} file(s) could not be uploaded. ${details}`;
+        setAttachmentActionError(message);
+        toast.error(message);
+      } else {
+        toast.success(files.length === 1 ? "Attachment uploaded." : "Attachments uploaded.");
+      }
+    } finally {
+      setIsUploadingAttachments(false);
+    }
+  };
+  const downloadAttachment = async (file) => {
+    setDownloadingAttachmentId(file.id);
+    setAttachmentActionError("");
+    try {
+      const blob = await attachmentService.download(file);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = file.file_name;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not download this attachment.";
+      setAttachmentActionError(message);
+      toast.error(message);
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
   };
 
   return <div className="w-full">
@@ -222,9 +277,9 @@ export function MyBookings({ onBack, customerTickets = [], mode = "customer", sh
           {isTeam && <div className="flex flex-wrap gap-2 border-b border-border p-3"><Button size="sm" variant="outline" onClick={recordCall}><Phone />Record customer call</Button><Button size="sm" variant="outline" onClick={() => { setAssigneeName("Rajesh Kumar"); updateTicket({ engineer: "Rajesh Kumar", status: "In Progress", progress: 45 }); onNotify?.({ title: "Engineer assigned", detail: `${selected.id} · Rajesh Kumar` }); }}><Users />Assign engineer</Button><Button size="sm" onClick={() => { updateTicket({ status: "Closed", progress: 100 }); onNotify?.({ title: "Ticket closed", detail: `${selected.id} · Completed` }); }}><CheckCircle2 />Close ticket</Button></div>}
           {(activeTab === "public" || (isTeam && activeTab === "internal")) && <Conversation channel={activeTab} messages={selectedMessages[activeTab]} draft={draft} setDraft={setDraft} onSend={send} onAttach={() => fileInputRef.current?.click()} activeTab={activeTab} setActiveTab={setActiveTab} attachments={attachments} isTeam={isTeam} />}
 
-          {activeTab === "attachments" && <div className="flex min-h-[554px] flex-col p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">Ticket attachments</h3><p className="mt-1 text-xs text-muted-foreground">Photos, work orders, reports, and customer documents.</p></div><Button onClick={() => fileInputRef.current?.click()}><Paperclip />Upload files</Button></div><div className="mt-5 divide-y divide-border rounded-md border border-border">{attachments.map((file, index) => <div key={`${file.name}-${index}`} className="flex items-center gap-3 p-4"><div className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary"><FileText className="h-4 w-4" /></div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.name}</p><p className="mt-1 text-[10px] text-muted-foreground">{file.type} · {file.size} · {file.by} · {file.time}</p></div><Button size="icon" variant="ghost" aria-label={`Download ${file.name}`}><Download /></Button></div>)}</div><div className="mt-auto border-t border-border pt-2"><TicketTabs activeTab={activeTab} setActiveTab={setActiveTab} attachments={attachments} isTeam={isTeam} /></div></div>}
+          {activeTab === "attachments" && <div className="flex min-h-[554px] flex-col p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">Ticket attachments</h3><p className="mt-1 text-xs text-muted-foreground">Photos, work orders, reports, and customer documents.</p></div><Button onClick={() => fileInputRef.current?.click()} disabled={!selectedTicket.dbId || isUploadingAttachments}><Paperclip />{isUploadingAttachments ? "Uploading..." : "Upload files"}</Button></div>{(attachmentActionError || (attachmentsQuery.error instanceof Error ? attachmentsQuery.error.message : "")) && <p role="alert" className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">{attachmentActionError || attachmentsQuery.error.message}</p>}{isUploadingAttachments && <p className="mt-3 text-xs text-muted-foreground" role="status">Saving attachments...</p>}<div className="mt-5 divide-y divide-border rounded-md border border-border">{attachmentsQuery.isLoading ? <p className="p-6 text-center text-xs text-muted-foreground" role="status">Loading attachments...</p> : attachments.length ? attachments.map((file) => <div key={file.id} className="flex items-center gap-3 p-4"><div className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary"><FileText className="h-4 w-4" /></div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.file_name}</p><p className="mt-1 text-[10px] text-muted-foreground">{file.content_type || "File"} · {Math.max((file.file_size ?? 0) / 1024, 1).toFixed(0)} KB · {new Date(file.uploaded_at).toLocaleString()}</p></div><Button size="icon" variant="ghost" aria-label={`Download ${file.file_name}`} onClick={() => downloadAttachment(file)} disabled={downloadingAttachmentId === file.id}><Download /></Button></div>) : <p className="p-6 text-center text-xs text-muted-foreground">{selectedTicket.dbId ? "No attachments have been uploaded for this ticket." : "Attachments are available for saved booking tickets."}</p>}</div><div className="mt-auto border-t border-border pt-2"><TicketTabs activeTab={activeTab} setActiveTab={setActiveTab} attachments={attachments} isTeam={isTeam} /></div></div>}
 
-          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={addFiles} />
+          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={addFiles} disabled={isUploadingAttachments} />
         </section>
 
       </div>
@@ -232,4 +287,3 @@ export function MyBookings({ onBack, customerTickets = [], mode = "customer", sh
     </div>}
   </div>;
 }
-

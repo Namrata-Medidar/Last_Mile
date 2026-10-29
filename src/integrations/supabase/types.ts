@@ -162,6 +162,44 @@ export type Database = {
           },
         ]
       }
+      booking_attachments: {
+        Row: {
+          booking_id: string
+          content_type: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          storage_path: string
+          uploaded_at: string
+        }
+        Insert: {
+          booking_id: string
+          content_type?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          storage_path: string
+          uploaded_at?: string
+        }
+        Update: {
+          booking_id?: string
+          content_type?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          storage_path?: string
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_attachments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           amount_paid: number
