@@ -178,8 +178,17 @@ export function MyBookings({
 }) {
   const isTeam = mode === "team";
   const allTickets = customerTickets;
+  const queryClient = useQueryClient();
   const [selectedRaw, setSelected] = useState(null);
   const selected = allTickets.find((t) => t.id === selectedRaw?.id) ?? allTickets[0];
+  const selectedBookingId = selected?.dbId ?? null;
+  const attachmentsQuery = useQuery({
+    queryKey: ["booking-attachments", selectedBookingId],
+    enabled: Boolean(selectedBookingId),
+    queryFn: () =>
+      selectedBookingId ? attachmentService.list(selectedBookingId) : Promise.resolve([]),
+  });
+  const attachments = attachmentsQuery.data ?? [];
   const [readTicketIds, setReadTicketIds] = useState([]);
   const [ticketUpdates, setTicketUpdates] = useState({});
   const [statusFilter, setStatusFilter] = useState("All");
