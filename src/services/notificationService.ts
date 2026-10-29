@@ -3,7 +3,13 @@ import { queryOptions, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AppNotification = { id: string; title: string; detail: string; read: boolean };
+export type AppNotification = {
+  id: string;
+  title: string;
+  detail: string;
+  read: boolean;
+  bookingId: string | null;
+};
 
 export const notificationsQuery = (userId: string | null) =>
   queryOptions({
@@ -13,11 +19,17 @@ export const notificationsQuery = (userId: string | null) =>
     queryFn: async (): Promise<AppNotification[]> => {
       const { data, error } = await supabase
         .from("notifications")
-        .select("id, title, detail, read_at")
+        .select("id, title, detail, read_at, booking_id")
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      return (data ?? []).map((n) => ({ id: n.id, title: n.title, detail: n.detail ?? "", read: !!n.read_at }));
+      return (data ?? []).map((n) => ({
+        id: n.id,
+        title: n.title,
+        detail: n.detail ?? "",
+        read: !!n.read_at,
+        bookingId: n.booking_id,
+      }));
     },
   });
 

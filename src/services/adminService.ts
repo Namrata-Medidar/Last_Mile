@@ -20,17 +20,60 @@ export const bookingStatsQuery = queryOptions({
   queryFn: () => run<BookingStat[]>(supabase.from("bookings").select("status, service_slug, total, created_at, priority").limit(5000)),
 });
 
-export const usersQuery = queryOptions({
-  queryKey: ["admin", "users"],
-  queryFn: async (): Promise<AdminUser[]> => {
-    const [profiles, roles] = await Promise.all([
-      run<Omit<AdminUser, "roles">[]>(supabase.from("profiles").select("id, full_name, email, company, created_at").order("created_at")),
-      run<{ user_id: string; role: AppRole }[]>(supabase.from("user_roles").select("user_id, role")),
-    ]);
-    return profiles.map((p) => ({ ...p, roles: roles.filter((r) => r.user_id === p.id).map((r) => r.role) }));
-  },
-});
+export type UserProfile = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  address: string | null;
+  status: string;
+  created_at: string;
+  roles: string[];
+};
 
+
+export const usersQuery = () =>
+  queryOptions({
+    queryKey: ["users-table"],
+    retry: 2,
+    queryFn: async (): Promise<UserProfile[]> => {
+      const [profilesResult, rolesResult] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            "id, full_name, email, phone, company, address, status, created_at"
+          )
+          .order("created_at", { ascending: false })
+          .limit(1000),
+
+        supabase
+          .from("user_roles")
+          .select("user_id, role, status")
+          .limit(5000),
+      ]);
+
+      if (profilesResult.error) throw profilesResult.error;
+      if (rolesResult.error) throw rolesResult.error;
+
+      const rolesByUser = new Map<string, string[]>();
+
+      for (const row of rolesResult.data ?? []) {
+        if (row.status !== "active") continue;
+
+        const roles = rolesByUser.get(row.user_id) ?? [];
+        roles.push(String(row.role));
+        rolesByUser.set(row.user_id, roles);
+      }
+
+      return (profilesResult.data ?? []).map((profile) => ({
+        ...profile,
+        roles: [
+          ...new Set(rolesByUser.get(profile.id) ?? []),
+        ].sort(),
+      }));
+    },
+  });
 export const pricingQuery = queryOptions({
   queryKey: ["admin", "pricing"],
   queryFn: async () => {

@@ -91,25 +91,46 @@ export const authService = {
     supabase.auth.signInWithPassword({ email, password }),
 
   // Register a new user through Supabase
-  signUp: (input: {
-    email: string;
-    password: string;
-    fullName: string;
-    company: string;
-    phone: string;
-  }) =>
-    supabase.auth.signUp({
-      email: input.email,
-      password: input.password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          full_name: input.fullName,
-          company: input.company,
-          phone: input.phone,
-        },
+
+signUp: async (input: {
+  email: string;
+  password: string;
+  fullName: string;
+  company: string;
+  phone: string;
+}) => {
+  const result = await supabase.auth.signUp({
+    email: input.email,
+    password: input.password,
+    options: {
+      emailRedirectTo: window.location.origin,
+      data: {
+        full_name: input.fullName,
+        company: input.company,
+        phone: input.phone,
       },
-    }),
+    },
+  });
+
+  if (result.error) {
+    console.error("SIGNUP ERROR:", {
+      message: result.error.message,
+      status: result.error.status,
+      name: result.error.name,
+    });
+  } else {
+    console.log("SIGNUP RESPONSE:", {
+      userCreated: Boolean(result.data.user),
+      sessionCreated: Boolean(result.data.session),
+      userId: result.data.user?.id,
+      emailConfirmationPending:
+        Boolean(result.data.user) && !result.data.session,
+    });
+  }
+
+  return result;
+},
+
 
   // Google uses Supabase OAuth; Lovable uses Lovable Cloud Auth
   signInWith: (provider: "google" | "lovable") => {

@@ -66,9 +66,8 @@ function AuthPage() {
   return (
     <div className="grid min-h-screen place-items-center bg-background px-4 py-10">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">LM</span>
-          <span className="text-sm font-semibold">Last Mile <span className="text-primary">Connect</span></span>
+        <Link to="/" aria-label="Last Mile Connect home" className="mx-auto flex w-fit rounded-md bg-white p-1">
+          <img src="/brand-logo.png" alt="Last Mile Connect — On-Site Services, Just a Click Away" className="h-auto w-44 object-contain" />
         </Link>
         <h1 className="mt-6 text-2xl font-semibold">
           {mode === "signin" ? "Sign in" : mode === "signup" ? "Create your account" : "Reset your password"}

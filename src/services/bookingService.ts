@@ -25,6 +25,7 @@ export type Ticket = {
 export type TicketUpdate = Partial<Pick<Ticket, "status" | "engineer" | "assigneePhone" | "progress" | "lastContact">>;
 
 export type NewBooking = {
+  clientRequestId?: string;
   level: string;
   count: number;
   priority: string;
@@ -128,6 +129,22 @@ export const commentsQuery = (userId: string | null) =>
 
 export const bookingService = {
   async create(customerId: string, b: NewBooking, profile: { company?: string | null; address?: string | null }): Promise<Ticket> {
+    const selectFields = "id, ticket_no, title, status, priority, engineer_name, engineer_phone, updated_at, city, customer_name, progress, last_contact, total, customer_rating";
+    const findByRequestId = async (): Promise<Ticket | null> => {
+      if (!b.clientRequestId) return null;
+      const { data, error } = await supabase
+        .from("bookings")
+        .select(selectFields)
+        .eq("customer_id", customerId)
+        .contains("details", { clientRequestId: b.clientRequestId })
+        .maybeSingle();
+      if (error) throw error;
+      return data ? toTicket(data) : null;
+    };
+
+    const existing = await findByRequestId();
+    if (existing) return existing;
+
     const { data, error } = await supabase
       .from("bookings")
       .insert({
@@ -137,7 +154,7 @@ export const bookingService = {
         customer_name: b.customer?.name || profile.company || null,
         site_address: b.site?.address || profile.address || null,
         city: null,
-        total: Math.max(0, Math.round(b.total)),
+        total: Math.max(0, Math.round(b.totalPayable ?? b.total)),
         details: {
           level: b.level,
           count: b.count,
@@ -155,16 +172,30 @@ export const bookingService = {
           site: b.site,
           contacts: b.contacts,
           issueDescription: b.issueDescription,
-          workInstructions: b.workInstructions
+          workInstructions: b.workInstructions,
+          ...(b.clientRequestId ? { clientRequestId: b.clientRequestId } : {}),
         },
       })
-      .select("id, ticket_no, title, status, priority, engineer_name, engineer_phone, updated_at, city, customer_name, progress, last_contact, total, customer_rating")
+      .select(selectFields)
       .single();
-    if (error) throw error;
+    if (error) {
+      if (error.code === "23505" && b.clientRequestId) {
+        const duplicate = await findByRequestId();
+        if (duplicate) return duplicate;
+      }
+      throw error;
+    }
     return toTicket(data);
   },
   async createSample(customerId: string, sample: { title: string; priority: string; city: string; customer: string }): Promise<void> {
-    const { error } = await supabase.from("bookings").insert({ customer_id: customerId, title: sample.title, priority: sample.priority, city: sample.city, customer_name: sample.customer });
+    const { error } = await supabase.from("bookings").insert({
+      customer_id: customerId,
+      title: sample.title,
+      priority: sample.priority,
+      city: sample.city,
+      customer_name: sample.customer,
+      details: { createdVia: "staff_sample" },
+    });
     if (error) throw error;
   },
   async update(dbId: string, u: TicketUpdate): Promise<void> {
@@ -175,6 +206,23 @@ export const bookingService = {
     if (u.progress !== undefined) patch.progress = u.progress;
     if (u.lastContact !== undefined) patch.last_contact = u.lastContact;
     const { error } = await supabase.from("bookings").update(patch).eq("id", dbId);
+    if (error) throw error;
+  },
+  async assign(
+    dbId: string,
+    assignee: { engineer: string; assigneePhone: string },
+  ): Promise<void> {
+    const { error } = await supabase.rpc("assign_booking_assignee", {
+      _booking_id: dbId,
+      _engineer_name: assignee.engineer,
+      _engineer_phone: assignee.assigneePhone,
+    });
+    if (error) throw error;
+  },
+  async close(dbId: string): Promise<void> {
+    const { error } = await supabase.rpc("close_booking_ticket", {
+      _booking_id: dbId,
+    });
     if (error) throw error;
   },
   async comment(dbId: string, visibility: "public" | "internal", body: string, author: { name: string; role: string }): Promise<void> {

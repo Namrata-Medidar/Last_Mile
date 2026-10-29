@@ -13,9 +13,15 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthenticatedSplatRouteImport } from './routes/_authenticated/$'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedBookingRouteImport } from './routes/_authenticated/booking'
+import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
+import { Route as AuthenticatedCompletionRouteImport } from './routes/_authenticated/completion'
 import { Route as AuthenticatedEngineerRouteImport } from './routes/_authenticated/engineer'
+import { Route as AuthenticatedPaymentRouteImport } from './routes/_authenticated/payment'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
+import { Route as AuthenticatedTrackingRouteImport } from './routes/_authenticated/tracking'
 import { Route as AuthenticatedInvoiceIdRouteImport } from './routes/_authenticated/invoice.$id'
 import { Route as AuthenticatedOpsEngineersRouteImport } from './routes/_authenticated/ops.engineers'
 
@@ -38,9 +44,29 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSplatRoute = AuthenticatedSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBookingRoute = AuthenticatedBookingRouteImport.update({
+  id: '/booking',
+  path: '/booking',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBookingsRoute = AuthenticatedBookingsRouteImport.update({
+  id: '/bookings',
+  path: '/bookings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCompletionRoute = AuthenticatedCompletionRouteImport.update({
+  id: '/completion',
+  path: '/completion',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedEngineerRoute = AuthenticatedEngineerRouteImport.update({
@@ -48,9 +74,19 @@ const AuthenticatedEngineerRoute = AuthenticatedEngineerRouteImport.update({
   path: '/engineer',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPaymentRoute = AuthenticatedPaymentRouteImport.update({
+  id: '/payment',
+  path: '/payment',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTrackingRoute = AuthenticatedTrackingRouteImport.update({
+  id: '/tracking',
+  path: '/tracking',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedInvoiceIdRoute = AuthenticatedInvoiceIdRouteImport.update({
@@ -69,9 +105,15 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/$': typeof AuthenticatedSplatRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/booking': typeof AuthenticatedBookingRoute
+  '/bookings': typeof AuthenticatedBookingsRoute
+  '/completion': typeof AuthenticatedCompletionRoute
   '/engineer': typeof AuthenticatedEngineerRoute
+  '/payment': typeof AuthenticatedPaymentRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/tracking': typeof AuthenticatedTrackingRoute
   '/invoice/$id': typeof AuthenticatedInvoiceIdRoute
   '/ops/engineers': typeof AuthenticatedOpsEngineersRoute
 }
@@ -79,9 +121,15 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/$': typeof AuthenticatedSplatRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/booking': typeof AuthenticatedBookingRoute
+  '/bookings': typeof AuthenticatedBookingsRoute
+  '/completion': typeof AuthenticatedCompletionRoute
   '/engineer': typeof AuthenticatedEngineerRoute
+  '/payment': typeof AuthenticatedPaymentRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/tracking': typeof AuthenticatedTrackingRoute
   '/invoice/$id': typeof AuthenticatedInvoiceIdRoute
   '/ops/engineers': typeof AuthenticatedOpsEngineersRoute
 }
@@ -91,9 +139,15 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/$': typeof AuthenticatedSplatRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/booking': typeof AuthenticatedBookingRoute
+  '/_authenticated/bookings': typeof AuthenticatedBookingsRoute
+  '/_authenticated/completion': typeof AuthenticatedCompletionRoute
   '/_authenticated/engineer': typeof AuthenticatedEngineerRoute
+  '/_authenticated/payment': typeof AuthenticatedPaymentRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
+  '/_authenticated/tracking': typeof AuthenticatedTrackingRoute
   '/_authenticated/invoice/$id': typeof AuthenticatedInvoiceIdRoute
   '/_authenticated/ops/engineers': typeof AuthenticatedOpsEngineersRoute
 }
@@ -103,9 +157,15 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/$'
     | '/admin'
+    | '/booking'
+    | '/bookings'
+    | '/completion'
     | '/engineer'
+    | '/payment'
     | '/profile'
+    | '/tracking'
     | '/invoice/$id'
     | '/ops/engineers'
   fileRoutesByTo: FileRoutesByTo
@@ -113,9 +173,15 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/$'
     | '/admin'
+    | '/booking'
+    | '/bookings'
+    | '/completion'
     | '/engineer'
+    | '/payment'
     | '/profile'
+    | '/tracking'
     | '/invoice/$id'
     | '/ops/engineers'
   id:
@@ -124,9 +190,15 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/reset-password'
+    | '/_authenticated/$'
     | '/_authenticated/admin'
+    | '/_authenticated/booking'
+    | '/_authenticated/bookings'
+    | '/_authenticated/completion'
     | '/_authenticated/engineer'
+    | '/_authenticated/payment'
     | '/_authenticated/profile'
+    | '/_authenticated/tracking'
     | '/_authenticated/invoice/$id'
     | '/_authenticated/ops/engineers'
   fileRoutesById: FileRoutesById
@@ -168,11 +240,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/$': {
+      id: '/_authenticated/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof AuthenticatedSplatRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/booking': {
+      id: '/_authenticated/booking'
+      path: '/booking'
+      fullPath: '/booking'
+      preLoaderRoute: typeof AuthenticatedBookingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bookings': {
+      id: '/_authenticated/bookings'
+      path: '/bookings'
+      fullPath: '/bookings'
+      preLoaderRoute: typeof AuthenticatedBookingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/completion': {
+      id: '/_authenticated/completion'
+      path: '/completion'
+      fullPath: '/completion'
+      preLoaderRoute: typeof AuthenticatedCompletionRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/engineer': {
@@ -182,11 +282,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEngineerRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/payment': {
+      id: '/_authenticated/payment'
+      path: '/payment'
+      fullPath: '/payment'
+      preLoaderRoute: typeof AuthenticatedPaymentRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/profile': {
       id: '/_authenticated/profile'
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof AuthenticatedProfileRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/tracking': {
+      id: '/_authenticated/tracking'
+      path: '/tracking'
+      fullPath: '/tracking'
+      preLoaderRoute: typeof AuthenticatedTrackingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/invoice/$id': {
@@ -207,17 +321,29 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedSplatRoute: typeof AuthenticatedSplatRoute
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedBookingRoute: typeof AuthenticatedBookingRoute
+  AuthenticatedBookingsRoute: typeof AuthenticatedBookingsRoute
+  AuthenticatedCompletionRoute: typeof AuthenticatedCompletionRoute
   AuthenticatedEngineerRoute: typeof AuthenticatedEngineerRoute
+  AuthenticatedPaymentRoute: typeof AuthenticatedPaymentRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
+  AuthenticatedTrackingRoute: typeof AuthenticatedTrackingRoute
   AuthenticatedInvoiceIdRoute: typeof AuthenticatedInvoiceIdRoute
   AuthenticatedOpsEngineersRoute: typeof AuthenticatedOpsEngineersRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedSplatRoute: AuthenticatedSplatRoute,
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedBookingRoute: AuthenticatedBookingRoute,
+  AuthenticatedBookingsRoute: AuthenticatedBookingsRoute,
+  AuthenticatedCompletionRoute: AuthenticatedCompletionRoute,
   AuthenticatedEngineerRoute: AuthenticatedEngineerRoute,
+  AuthenticatedPaymentRoute: AuthenticatedPaymentRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
+  AuthenticatedTrackingRoute: AuthenticatedTrackingRoute,
   AuthenticatedInvoiceIdRoute: AuthenticatedInvoiceIdRoute,
   AuthenticatedOpsEngineersRoute: AuthenticatedOpsEngineersRoute,
 }

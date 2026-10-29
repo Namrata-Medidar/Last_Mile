@@ -12,18 +12,38 @@ function AppShell({
   role,
   onRoleChange,
   projectSection,
-  onProjectSectionChange,
   onCreateProjectTicket,
+  canViewTickets,
+  canViewRoles,
+  canViewDashboard,
+  canViewPayment,
+  canCreateTickets,
+  canViewFieldEngineer,
+  canViewUpcomingFeatures,
+  canViewCustomerPortal,
   notifications,
   canUseTeam,
   onNotificationsOpen,
+  onNotificationSelect,
   showServiceNav = true
 }) {
   return /* @__PURE__ */ jsxs("div", { className: "min-h-screen bg-background", children: [
-    /* @__PURE__ */ jsx(TopNav, { crumbs, onBookingsSelect, role, onRoleChange, notifications, canUseTeam, onNotificationsOpen }),
+    /* @__PURE__ */ jsx(TopNav, { crumbs, onBookingsSelect, role, onRoleChange, notifications, canUseTeam, onNotificationsOpen, onNotificationSelect }),
     /* @__PURE__ */ jsxs("div", { className: "flex w-full", children: [
-      showServiceNav && /* @__PURE__ */ jsx(SideNav, { activeService, onServiceSelect }),
-      role === "team" && /* @__PURE__ */ jsx(ProjectSideNav, { activeSection: projectSection, onSectionChange: onProjectSectionChange, onCreateTicket: onCreateProjectTicket }),
+      showServiceNav &&
+showServiceNav &&
+  jsx(SideNav, {
+    activeService,
+    onServiceSelect,
+    role,
+    onBookingsSelect,
+    onRoleChange,
+    canUseTeam,
+    canViewFieldEngineer,
+    canViewUpcomingFeatures,
+    canViewCustomerPortal,
+  }),
+      role === "team" && /* @__PURE__ */ jsx(ProjectSideNav, { activeSection: projectSection, onCreateTicket: onCreateProjectTicket, canViewDashboard, canViewTickets, canViewRoles, canViewPayment, canCreateTickets }),
       /* @__PURE__ */ jsx("main", { id: "main-content", className: "min-w-0 flex-1 px-4 py-5 md:px-6 xl:px-8", children })
     ] })
   ] });
