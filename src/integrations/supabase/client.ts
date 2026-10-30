@@ -66,12 +66,18 @@ function createSupabaseClient() {
     global: {
       fetch: createSupabaseFetch(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY),
     },
-    auth: {
-      storage: brokeredPreviewStorage(),
-      persistSession: true,
-      autoRefreshToken: true,
+    // auth: {
+    //   storage: brokeredPreviewStorage(),
+    //   persistSession: true,
+    //   autoRefreshToken: true,
+    // },
+      auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: true,
     },
-  });
+      });
+  
 }
 
 let _supabase: ReturnType<typeof createSupabaseClient> | undefined;

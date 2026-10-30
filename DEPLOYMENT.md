@@ -14,6 +14,8 @@
 - Invite staff: they sign up, then a Super Admin/Admin grants roles in Admin & operations → Users.
 - Engineers register from the Engineer portal; approve them in Engineers & dispatch.
 - Payments are recorded by staff (bank transfer, UPI, cheque, cash, card). Online gateway (Razorpay) can be added with your keys.
+- In Supabase Dashboard → Authentication → Settings, enable Email/password sign-in, set **JWT expiry** to **900 seconds**, and add the production URL to the site URL and redirect URL allowlist. The `supabase/config.toml` setting applies to local Supabase CLI projects; update hosted/Lovable project settings in the dashboard separately.
+- Supabase Auth issues and refreshes access tokens; the app does not create or separately persist JWTs. Authenticated sessions are signed out after 15 minutes without activity or 15 minutes with the tab in the background.
 - Before uploading booking attachments, run the full `drizzle/migrations/0008_booking_attachments.sql` script in the Supabase SQL Editor. It reuses the existing `booking_attachments` table, creates the private Storage bucket, and configures booking-scoped access policies. It is safe to rerun if the table already exists.
 - If an existing `booking_attachments` table still rejects metadata inserts with a row-level security error, run `drizzle/migrations/0009_booking_attachments_rls.sql` in the Supabase SQL Editor to replace that table's conflicting policies with booking-scoped policies.
 
