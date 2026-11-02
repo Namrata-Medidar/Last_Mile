@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { authService, safeRedirect } from "@/services/authService";
+import { generate_token } from "@/services/tokenService";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (s: Record<string, unknown>): { redirect?: string } => (typeof s["redirect"] === "string" ? { redirect: s["redirect"] } : {}),
@@ -109,18 +110,75 @@ function AuthPage() {
 }
 
 function SignInForm({ onForgot }: { onForgot: () => void }) {
-  const form = useForm<z.infer<typeof signInSchema>>({ resolver: zodResolver(signInSchema) });
-  const submit = form.handleSubmit(async (v) => {
-    const { error } = await authService.signIn(v.email, v.password);
-    if (error) toast.error(error.message.includes("confirm") ? "Please confirm your email first." : "Incorrect email or password.");
+  const form = useForm<z.infer<typeof signInSchema>>({
+    resolver: zodResolver(signInSchema),
   });
+
+  const submit = form.handleSubmit(async (v) => {
+    try {
+      const { data, error } = await authService.signIn(
+        v.email,
+        v.password
+      );
+
+      if (error) {
+        toast.error(
+          error.message.includes("confirm")
+            ? "Please confirm your email first."
+            : "Incorrect email or password."
+        );
+        return;
+      }
+
+      if (data.session) {
+        await generate_token();
+        toast.success("Login successful!");
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      toast.error("Login failed. Please try again.");
+    }
+  });
+
   const e = form.formState.errors;
+
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
-      <Field id="email" label="Work email" type="email" autoComplete="email" error={e.email?.message} {...form.register("email")} />
-      <Field id="password" label="Password" type="password" autoComplete="current-password" error={e.password?.message} {...form.register("password")} />
-      <div className="flex justify-end"><button type="button" className="text-link text-xs" onClick={onForgot}>Forgot password?</button></div>
-      <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? "Signing in…" : "Sign in"}</Button>
+      <Field
+        id="email"
+        label="Work email"
+        type="email"
+        autoComplete="email"
+        error={e.email?.message}
+        {...form.register("email")}
+      />
+
+      <Field
+        id="password"
+        label="Password"
+        type="password"
+        autoComplete="current-password"
+        error={e.password?.message}
+        {...form.register("password")}
+      />
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          className="text-link text-xs"
+          onClick={onForgot}
+        >
+          Forgot password?
+        </button>
+      </div>
+
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={form.formState.isSubmitting}
+      >
+        {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
+      </Button>
     </form>
   );
 }
