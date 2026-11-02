@@ -19,6 +19,22 @@ export type Engineer = {
   status: string;
 };
 
+export type EngineerProfileUpdate = Pick<
+  Engineer,
+  | "full_name"
+  | "phone"
+  | "grade"
+  | "mode"
+  | "city"
+  | "kit"
+  | "approval_status"
+  | "available"
+  | "max_active_jobs"
+  | "status"
+>;
+
+export type EngineerProfilePatch = Partial<EngineerProfileUpdate>;
+
 export type Job = {
   id: string;
   ticket_no: string;
@@ -35,14 +51,19 @@ export type Job = {
   created_at: string;
 };
 
-const ENGINEER_COLS = "id, user_id, full_name, phone, grade, mode, city, kit, approval_status, available, max_active_jobs, rating, ratings_count, status";
+const ENGINEER_COLS =
+  "id, user_id, full_name, phone, grade, mode, city, kit, approval_status, available, max_active_jobs, rating, ratings_count, status";
 
 export const myEngineerQuery = (userId: string | null) =>
   queryOptions({
     queryKey: ["engineer", "me", userId],
     enabled: !!userId,
     queryFn: async (): Promise<Engineer | null> => {
-      const { data, error } = await supabase.from("engineers").select(ENGINEER_COLS).eq("user_id", userId!).maybeSingle();
+      const { data, error } = await supabase
+        .from("engineers")
+        .select(ENGINEER_COLS)
+        .eq("user_id", userId!)
+        .maybeSingle();
       if (error) throw error;
       return data as Engineer | null;
     },
@@ -56,7 +77,9 @@ export const myJobsQuery = (engineerId: string | null) =>
     queryFn: async (): Promise<Job[]> => {
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, ticket_no, title, status, priority, city, customer_name, site_address, total, customer_rating, started_at, completed_at, created_at")
+        .select(
+          "id, ticket_no, title, status, priority, city, customer_name, site_address, total, customer_rating, started_at, completed_at, created_at",
+        )
         .eq("engineer_id", engineerId!)
         .order("created_at", { ascending: false })
         .limit(200);
@@ -86,7 +109,11 @@ export const engineerCancellationMessagesQuery = (engineerId: string | null) =>
 export const payoutShareQuery = queryOptions({
   queryKey: ["settings", "engineer_payout_share"],
   queryFn: async (): Promise<number> => {
-    const { data } = await supabase.from("system_settings").select("value").eq("key", "engineer_payout_share").maybeSingle();
+    const { data } = await supabase
+      .from("system_settings")
+      .select("value")
+      .eq("key", "engineer_payout_share")
+      .maybeSingle();
     return Number(data?.value ?? 0.6);
   },
 });
@@ -95,11 +122,34 @@ export const allEngineersQuery = queryOptions({
   queryKey: ["engineers", "all"],
   retry: 2,
   queryFn: async (): Promise<Engineer[]> => {
-    const { data, error } = await supabase.from("engineers").select(ENGINEER_COLS).order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("engineers")
+      .select(ENGINEER_COLS)
+      .order("created_at", { ascending: false });
     if (error) throw error;
     return (data ?? []) as Engineer[];
   },
 });
+
+export const engineerWorkloadQuery = (enabled: boolean) =>
+  queryOptions({
+    queryKey: ["engineers", "workload"],
+    enabled,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("engineer_id")
+        .not("engineer_id", "is", null)
+        .in("status", ["Open", "In Progress"]);
+      if (error) throw error;
+
+      return (data ?? []).reduce<Record<string, number>>((counts, booking) => {
+        const engineerId = booking.engineer_id;
+        if (engineerId) counts[engineerId] = (counts[engineerId] ?? 0) + 1;
+        return counts;
+      }, {});
+    },
+  });
 
 export const unassignedQuery = queryOptions({
   queryKey: ["bookings", "unassigned"],
@@ -123,7 +173,17 @@ export function computeEarnings(jobs: Pick<Job, "status" | "total">[], share: nu
 }
 
 export const engineerService = {
-  async apply(userId: string, input: { full_name: string; phone: string; grade: string; mode: string; city: string; kit: string }) {
+  async apply(
+    userId: string,
+    input: {
+      full_name: string;
+      phone: string;
+      grade: string;
+      mode: string;
+      city: string;
+      kit: string;
+    },
+  ) {
     const { error } = await supabase.from("engineers").insert({ user_id: userId, ...input });
     if (error) throw error;
   },
@@ -139,8 +199,15 @@ export const engineerService = {
     const { error } = await supabase.from("engineers").update({ approval_status }).eq("id", id);
     if (error) throw error;
   },
+  async updateProfile(id: string, profile: EngineerProfilePatch) {
+    const { error } = await supabase.from("engineers").update(profile).eq("id", id);
+    if (error) throw error;
+  },
   async jobAction(bookingId: string, action: "start" | "complete") {
-    const { error } = await supabase.rpc("engineer_job_action", { _booking_id: bookingId, _action: action });
+    const { error } = await supabase.rpc("engineer_job_action", {
+      _booking_id: bookingId,
+      _action: action,
+    });
     if (error) throw error;
   },
   async autoAssign(bookingId: string): Promise<string | null> {
@@ -149,7 +216,11 @@ export const engineerService = {
     return data;
   },
   async rate(bookingId: string, rating: number, feedback: string) {
-    const { error } = await supabase.rpc("rate_booking", { _booking_id: bookingId, _rating: rating, _feedback: feedback });
+    const { error } = await supabase.rpc("rate_booking", {
+      _booking_id: bookingId,
+      _rating: rating,
+      _feedback: feedback,
+    });
     if (error) throw error;
   },
 };
@@ -159,15 +230,24 @@ export function useEngineerRealtime(key: string) {
   useEffect(() => {
     const channel = supabase
       .channel(`engineer-${key}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => qc.invalidateQueries({ queryKey: ["engineer"] }))
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "booking_comments" }, () => {
-        qc.invalidateQueries({ queryKey: ["engineer", "cancellation-messages"] });
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => {
+        qc.invalidateQueries({ queryKey: ["engineer"] });
+        qc.invalidateQueries({ queryKey: ["engineers", "workload"] });
       })
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "booking_comments" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["engineer", "cancellation-messages"] });
+        },
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "engineers" }, () => {
         qc.invalidateQueries({ queryKey: ["engineer"] });
         qc.invalidateQueries({ queryKey: ["engineers"] });
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [key, qc]);
 }

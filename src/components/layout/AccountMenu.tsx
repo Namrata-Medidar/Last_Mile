@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { HardHat, LayoutDashboard, LogOut, UserRound, Users } from "lucide-react";
+import { LayoutDashboard, LogOut, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -85,20 +85,6 @@ export function AccountMenu() {
             Profile & security
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/engineer">
-            <HardHat />
-            Engineer portal
-          </Link>
-        </DropdownMenuItem>
-        {isStaff && (
-          <DropdownMenuItem asChild>
-            <Link to="/ops/engineers">
-              <Users />
-              Engineers & dispatch
-            </Link>
-          </DropdownMenuItem>
-        )}
         {isStaff && (
           <DropdownMenuItem asChild>
             <Link to="/admin">

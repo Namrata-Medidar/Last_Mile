@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/usePermission";
 import { BillingPanel } from "@/components/admin/BillingPanel";
+import { EngineerDispatchPanel } from "@/components/admin/EngineerDispatchPanel";
 import { ROLE_LABELS, type AppRole } from "@/services/authService";
 import {
   cancellationPolicyService,
@@ -32,6 +33,9 @@ import {
 } from "@/services/adminService";
 
 export const Route = createFileRoute("/_authenticated/admin")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: search.tab === "engineers" ? "engineers" : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Admin & operations | Last Mile Connect" },
@@ -57,6 +61,7 @@ const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
 function AdminPage() {
   const { isStaff, ready, roles } = useAuth();
+  const { tab } = Route.useSearch();
   const permissions = usePermissions();
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   const isSuperAdmin = roles.includes("super_admin");
@@ -104,11 +109,13 @@ function AdminPage() {
         )}
         <Tabs
           defaultValue={
-            permissions.can("tickets.view")
-              ? "dashboard"
-              : permissions.can("users.view")
-                ? "users"
-                : "billing"
+            tab === "engineers" && isStaff
+              ? "engineers"
+              : permissions.can("tickets.view")
+                ? "dashboard"
+                : permissions.can("users.view")
+                  ? "users"
+                  : "billing"
           }
         >
           <TabsList>
@@ -119,6 +126,7 @@ function AdminPage() {
             {permissions.can("users.view") && <TabsTrigger value="users">Users</TabsTrigger>}
             {isAdmin && <TabsTrigger value="pricing">Prices</TabsTrigger>}
             {isAdmin && <TabsTrigger value="audit">Change history</TabsTrigger>}
+            {isStaff && <TabsTrigger value="engineers">Engineers &amp; dispatch</TabsTrigger>}
           </TabsList>
           {permissions.can("tickets.view") && (
             <TabsContent value="dashboard">
@@ -144,6 +152,11 @@ function AdminPage() {
           {isAdmin && (
             <TabsContent value="audit">
               <Audit />
+            </TabsContent>
+          )}
+          {isStaff && (
+            <TabsContent value="engineers">
+              <EngineerDispatchPanel />
             </TabsContent>
           )}
         </Tabs>
