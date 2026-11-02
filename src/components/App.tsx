@@ -391,15 +391,28 @@ export function App({
     }
   };
 
-  const cancelTicket = async (ticketId: string, message: string): Promise<void> => {
+  const cancelTicket = async (ticketId: string, message: string): Promise<string | null> => {
     const ticket = customerTickets.find((item) => item.id === ticketId);
     if (!ticket?.dbId)
       throw new Error("Could not find this booking. Refresh My Orders and try again.");
-    await bookingService.cancel(ticket.dbId, message);
+    await bookingService.cancel(ticket.dbId);
+    let messageError: string | null = null;
+    if (message) {
+      try {
+        await bookingService.comment(ticket.dbId, "public", `Cancellation message: ${message}`, {
+          name: auth.profile?.full_name || auth.email || "Customer",
+          role: "Customer",
+        });
+      } catch (error) {
+        messageError =
+          error instanceof Error ? error.message : "The cancellation message could not be saved.";
+      }
+    }
     await Promise.all([
       refreshTickets(),
       qc.invalidateQueries({ queryKey: ["booking-comments", userId] }),
     ]);
+    return messageError;
   };
 
   const addComment = async (ticketNo: string, visibility: "public" | "internal", text: string) => {
@@ -619,7 +632,7 @@ export function App({
           role="alert"
           className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
         >
-          Services could not be loaded.{" "}
+          Services could not be loaded: {servicesResult.error.message}.{" "}
           <button className="underline" onClick={() => servicesResult.refetch()}>
             Retry
           </button>
@@ -645,8 +658,10 @@ export function App({
       {page === "bookings" && (
         <MyBookings
           onBack={goHome}
+          currentUserId={userId}
           customerTickets={customerTickets}
           comments={commentsResult.data}
+          commentsError={commentsResult.error?.message ?? null}
           onUpdateTicket={updateTicket}
           onCancelTicket={cancelTicket}
           cancellationPolicy={cancellationPolicy}
@@ -668,6 +683,7 @@ export function App({
           onBack={goHome}
           customerTickets={customerTickets}
           comments={commentsResult.data}
+          commentsError={commentsResult.error?.message ?? null}
           onUpdateTicket={updateTicket}
           onComment={addComment}
           loading={ticketsResult.isLoading}

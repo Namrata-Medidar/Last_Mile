@@ -6,6 +6,7 @@ import type { TablesUpdate } from "@/integrations/supabase/types";
 /** Shape the existing order screens already use. */
 export type Ticket = {
   dbId: string;
+  customerId: string;
   id: string;
   title: string;
   status: "Open" | "In Progress" | "Closed" | "Cancelled";
@@ -73,6 +74,7 @@ function ago(iso: string): string {
 
 type Row = {
   id: string;
+  customer_id: string;
   ticket_no: string;
   title: string;
   status: string;
@@ -104,6 +106,7 @@ const toTicket = (r: Row): Ticket => {
 
   return {
     dbId: r.id,
+    customerId: r.customer_id,
     id: r.ticket_no,
     title: r.title,
     status: r.status as Ticket["status"],
@@ -135,7 +138,7 @@ export const ticketsQuery = (userId: string | null) =>
       const { data, error } = await supabase
         .from("bookings")
         .select(
-          "id, ticket_no, title, status, priority, engineer_id, engineer_name, engineer_phone, updated_at, created_at, city, customer_name, progress, last_contact, total, customer_rating, details",
+          "id, customer_id, ticket_no, title, status, priority, engineer_id, engineer_name, engineer_phone, updated_at, created_at, city, customer_name, progress, last_contact, total, customer_rating, details",
         )
         .order("created_at", { ascending: false })
         .limit(500);
@@ -179,7 +182,7 @@ export const bookingService = {
     profile: { company?: string | null; address?: string | null },
   ): Promise<Ticket> {
     const selectFields =
-      "id, ticket_no, title, status, priority, engineer_id, engineer_name, engineer_phone, updated_at, created_at, city, customer_name, progress, last_contact, total, customer_rating, details";
+      "id, customer_id, ticket_no, title, status, priority, engineer_id, engineer_name, engineer_phone, updated_at, created_at, city, customer_name, progress, last_contact, total, customer_rating, details";
     const findByRequestId = async (): Promise<Ticket | null> => {
       if (!b.clientRequestId) return null;
       const { data, error } = await supabase
@@ -283,10 +286,9 @@ export const bookingService = {
     });
     if (error) throw error;
   },
-  async cancel(dbId: string, message: string): Promise<void> {
+  async cancel(dbId: string): Promise<void> {
     const { error } = await supabase.rpc("cancel_my_booking", {
       _booking_id: dbId,
-      _message: message || null,
     });
     if (error) throw error;
   },

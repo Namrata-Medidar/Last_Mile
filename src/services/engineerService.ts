@@ -65,6 +65,24 @@ export const myJobsQuery = (engineerId: string | null) =>
     },
   });
 
+export const engineerCancellationMessagesQuery = (engineerId: string | null) =>
+  queryOptions({
+    queryKey: ["engineer", "cancellation-messages", engineerId],
+    enabled: Boolean(engineerId),
+    queryFn: async () => {
+      if (!engineerId) return [];
+      const { data, error } = await supabase
+        .from("booking_comments")
+        .select("booking_id, body, created_at, bookings!inner(engineer_id)")
+        .eq("visibility", "public")
+        .like("body", "Cancellation message:%")
+        .eq("bookings.engineer_id", engineerId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
 export const payoutShareQuery = queryOptions({
   queryKey: ["settings", "engineer_payout_share"],
   queryFn: async (): Promise<number> => {
@@ -142,6 +160,9 @@ export function useEngineerRealtime(key: string) {
     const channel = supabase
       .channel(`engineer-${key}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => qc.invalidateQueries({ queryKey: ["engineer"] }))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "booking_comments" }, () => {
+        qc.invalidateQueries({ queryKey: ["engineer", "cancellation-messages"] });
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "engineers" }, () => {
         qc.invalidateQueries({ queryKey: ["engineer"] });
         qc.invalidateQueries({ queryKey: ["engineers"] });

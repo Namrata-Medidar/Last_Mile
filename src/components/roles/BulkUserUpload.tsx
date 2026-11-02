@@ -101,9 +101,9 @@ export function BulkUserUpload({ roles, onComplete }: Props) {
 
   return (
     <>
-      <Button type="button" onClick={() => setOpen(true)}>
+      {/* <Button type="button" onClick={() => setOpen(true)}>
         <Upload /> Bulk upload
-      </Button>
+      </Button> */}
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>

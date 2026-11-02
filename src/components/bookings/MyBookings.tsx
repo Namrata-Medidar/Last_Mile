@@ -310,6 +310,7 @@ function ProjectDashboard({ allTickets }) {
 
 export function MyBookings({
   onBack,
+  currentUserId,
   customerTickets = [],
   mode = "customer",
   showDashboard = false,
@@ -325,10 +326,12 @@ export function MyBookings({
   canAddAssignee = false,
   canCloseTicket = false,
   comments,
+  commentsError,
   loading = false,
   targetTicketId,
 }: {
   onBack: () => void;
+  currentUserId?: string | null;
   customerTickets?: Ticket[];
   mode?: "customer" | "team";
   showDashboard?: boolean;
@@ -339,7 +342,7 @@ export function MyBookings({
     update: TicketUpdate,
     action?: "edit" | "assignee" | "close",
   ) => Promise<boolean> | boolean | void;
-  onCancelTicket?: (ticketId: string, message: string) => Promise<void>;
+  onCancelTicket?: (ticketId: string, message: string) => Promise<string | null>;
   cancellationPolicy?: CancellationPolicy | null;
   cancellationPolicyLoading?: boolean;
   cancellationPolicyError?: string | null;
@@ -348,6 +351,7 @@ export function MyBookings({
   canCloseTicket?: boolean;
   canEditTickets?: boolean;
   comments?: CommentsByTicket | undefined;
+  commentsError?: string | null;
   loading?: boolean;
   targetTicketId?: string | undefined;
 }) {
@@ -452,6 +456,14 @@ export function MyBookings({
   if (!selected)
     return (
       <div className="w-full">
+        {commentsError && (
+          <p
+            role="alert"
+            className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            Ticket messages could not be loaded: {commentsError}
+          </p>
+        )}
         {isTeam && showDashboard && <ProjectDashboard allTickets={allTickets} />}
         {showTickets && (
           <div className={`${panel} grid place-items-center py-16 text-center`}>
@@ -529,6 +541,9 @@ export function MyBookings({
           })
         : "Not scheduled";
   const selectedMessages = comments?.[selected.id] ?? { public: [], internal: [] };
+  const cancellationMessages = selectedMessages.public.filter((message) =>
+    message.text.startsWith("Cancellation message:"),
+  );
   const unreadComments =
     selected.unreadComments && !readTicketIds.includes(selected.id) ? selected.unreadComments : 0;
   const selectTicket = (ticket) => {
@@ -790,97 +805,110 @@ export function MyBookings({
               </header>
               {!isTeam &&
                 (selectedTicket.status === "Open" || selectedTicket.status === "In Progress") &&
-                selectedTicket.dbId &&
                 onCancelTicket && (
                   <div className="flex justify-end border-b border-border p-3">
-                    <AlertDialog
-                      open={cancelDialogOpen}
-                      onOpenChange={(open) => {
-                        setCancelDialogOpen(open);
-                        if (open) {
-                          setCancelError("");
-                          setCancellationMessage("");
-                        }
-                      }}
-                    >
-                      <AlertDialogTrigger asChild>
-                        <Button size="sm" variant="outline" disabled={isCancelling}>
-                          Cancel booking
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Cancel this booking?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This booking can be cancelled while it is open, including after an
-                            engineer has been assigned.
-                            {cancellationPolicyLoading ? (
-                              <span className="mt-2 block">
-                                Loading your cancellation terms. You can still cancel; no payment is
-                                collected here.
-                              </span>
-                            ) : cancellationPolicyError ? (
-                              <span className="mt-2 block text-destructive">
-                                Cancellation terms could not be loaded: {cancellationPolicyError}{" "}
-                                You can still cancel; no payment is collected here.
-                              </span>
-                            ) : cancellationPolicy ? (
-                              <span className="mt-2 block">
-                                {cancellationFeeDue
-                                  ? `A cancellation fee of ₹${Math.round(cancellationPolicy.fee).toLocaleString("en-IN")} applies.`
-                                  : `No cancellation fee applies now. The fee of ₹${Math.round(cancellationPolicy.fee).toLocaleString("en-IN")} applies ${cancellationWindowDescription(cancellationPolicy)}.`}{" "}
-                                This cancellation does not collect or record a payment.
-                              </span>
-                            ) : null}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <div className="space-y-2">
-                          <label htmlFor="cancellation-message" className="text-sm font-medium">
-                            Message to the service team (optional)
-                          </label>
-                          <Textarea
-                            id="cancellation-message"
-                            value={cancellationMessage}
-                            onChange={(event) => setCancellationMessage(event.target.value)}
-                            maxLength={2000}
-                            placeholder="Tell us why you are cancelling, or leave this blank."
-                            disabled={isCancelling}
-                          />
-                          <p className="text-right text-xs text-muted-foreground">
-                            {cancellationMessage.length}/2000
-                          </p>
-                        </div>
-                        {cancelError && (
-                          <p role="alert" className="text-sm text-destructive">
-                            Cancellation failed: {cancelError}
-                          </p>
-                        )}
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Keep booking</AlertDialogCancel>
-                          <Button
-                            type="button"
-                            disabled={isCancelling}
-                            onClick={async () => {
-                              setIsCancelling(true);
-                              setCancelError("");
-                              try {
-                                await onCancelTicket(selectedTicket.id, cancellationMessage.trim());
-                                toast.success("Booking cancelled.");
-                                setCancelDialogOpen(false);
-                              } catch (error) {
-                                const message = getCancellationErrorMessage(error);
-                                setCancelError(message);
-                                toast.error(`Booking could not be cancelled: ${message}`);
-                              } finally {
-                                setIsCancelling(false);
-                              }
-                            }}
-                          >
-                            {isCancelling ? "Cancelling…" : "Cancel booking"}
+                    {selectedTicket.customerId !== currentUserId ? (
+                      <p className="text-xs text-muted-foreground">
+                        Only the booking owner can cancel this booking.
+                      </p>
+                    ) : selectedTicket.dbId ? (
+                      <AlertDialog
+                        open={cancelDialogOpen}
+                        onOpenChange={(open) => {
+                          setCancelDialogOpen(open);
+                          if (open) {
+                            setCancelError("");
+                            setCancellationMessage("");
+                          }
+                        }}
+                      >
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant="outline" disabled={isCancelling}>
+                            Cancel booking
                           </Button>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Cancel this booking?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This booking can be cancelled while it is open, including after an
+                              engineer has been assigned.
+                              {cancellationPolicyLoading ? (
+                                <span className="mt-2 block">
+                                  Loading your cancellation terms. You can still cancel; no payment
+                                  is collected here.
+                                </span>
+                              ) : cancellationPolicyError ? (
+                                <span className="mt-2 block text-destructive">
+                                  Cancellation terms could not be loaded: {cancellationPolicyError}{" "}
+                                  You can still cancel; no payment is collected here.
+                                </span>
+                              ) : cancellationPolicy ? (
+                                <span className="mt-2 block">
+                                  {cancellationFeeDue
+                                    ? `A cancellation fee of ₹${Math.round(cancellationPolicy.fee).toLocaleString("en-IN")} applies.`
+                                    : `No cancellation fee applies now. The fee of ₹${Math.round(cancellationPolicy.fee).toLocaleString("en-IN")} applies ${cancellationWindowDescription(cancellationPolicy)}.`}{" "}
+                                  This cancellation does not collect or record a payment.
+                                </span>
+                              ) : null}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <div className="space-y-2">
+                            <label htmlFor="cancellation-message" className="text-sm font-medium">
+                              Message to the service team (optional)
+                            </label>
+                            <Textarea
+                              id="cancellation-message"
+                              value={cancellationMessage}
+                              onChange={(event) => setCancellationMessage(event.target.value)}
+                              maxLength={2000}
+                              placeholder="Tell us why you are cancelling, or leave this blank."
+                              disabled={isCancelling}
+                            />
+                            <p className="text-right text-xs text-muted-foreground">
+                              {cancellationMessage.length}/2000
+                            </p>
+                          </div>
+                          {cancelError && (
+                            <p role="alert" className="text-sm text-destructive">
+                              Cancellation failed: {cancelError}
+                            </p>
+                          )}
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Keep booking</AlertDialogCancel>
+                            <Button
+                              type="button"
+                              disabled={isCancelling}
+                              onClick={async () => {
+                                setIsCancelling(true);
+                                setCancelError("");
+                                try {
+                                  const messageError = await onCancelTicket(
+                                    selectedTicket.id,
+                                    cancellationMessage.trim(),
+                                  );
+                                  toast.success("Booking cancelled.");
+                                  if (messageError) {
+                                    toast.error(
+                                      `Booking cancelled, but the message could not be saved: ${messageError}`,
+                                    );
+                                  }
+                                  setCancelDialogOpen(false);
+                                } catch (error) {
+                                  const message = getCancellationErrorMessage(error);
+                                  setCancelError(message);
+                                  toast.error(`Booking could not be cancelled: ${message}`);
+                                } finally {
+                                  setIsCancelling(false);
+                                }
+                              }}
+                            >
+                              {isCancelling ? "Cancelling…" : "Cancel booking"}
+                            </Button>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    ) : null}
                   </div>
                 )}
               <div className="border-b border-border px-4 py-3">
@@ -931,6 +959,23 @@ export function MyBookings({
                   </div>
                 ))}
               </div>
+              {cancellationMessages.length > 0 && (
+                <div className="space-y-2 border-b border-border p-4">
+                  {cancellationMessages.map((message) => (
+                    <div
+                      key={`${message.time}-${message.text}`}
+                      className="rounded-md border border-warning/30 bg-warning/10 p-3"
+                    >
+                      <p className="text-xs font-semibold text-warning">
+                        Customer cancellation message · {message.sender} · {message.time}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+                        {message.text.replace(/^Cancellation message:\s*/, "")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="grid gap-3 border-b border-border p-4 xl:grid-cols-2">
                 <div
                   className={`self-start rounded-md border p-4 ${isAssigned ? "border-success/30 bg-success/5" : "border-warning/30 bg-warning/5"}`}

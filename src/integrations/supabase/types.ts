@@ -625,46 +625,46 @@ export type Database = {
       };
       customer_details: {
         Row: {
-          address: string | null
-          city: string | null
-          created_at: string | null
-          id: string
-          poc: string | null
-          poc_no: string | null
-          priority: string | null
-          site_readiness: string | null
-          status: string | null
-          store_code: string
-          store_name: string | null
-        }
+          address: string | null;
+          city: string | null;
+          created_at: string | null;
+          id: string;
+          poc: string | null;
+          poc_no: string | null;
+          priority: string | null;
+          site_readiness: string | null;
+          status: string | null;
+          store_code: string;
+          store_name: string | null;
+        };
         Insert: {
-          address?: string | null
-          city?: string | null
-          created_at?: string | null
-          id?: string
-          poc?: string | null
-          poc_no?: string | null
-          priority?: string | null
-          site_readiness?: string | null
-          status?: string | null
-          store_code: string
-          store_name?: string | null
-        }
+          address?: string | null;
+          city?: string | null;
+          created_at?: string | null;
+          id?: string;
+          poc?: string | null;
+          poc_no?: string | null;
+          priority?: string | null;
+          site_readiness?: string | null;
+          status?: string | null;
+          store_code: string;
+          store_name?: string | null;
+        };
         Update: {
-          address?: string | null
-          city?: string | null
-          created_at?: string | null
-          id?: string
-          poc?: string | null
-          poc_no?: string | null
-          priority?: string | null
-          site_readiness?: string | null
-          status?: string | null
-          store_code?: string
-          store_name?: string | null
-        }
-        Relationships: []
-      }
+          address?: string | null;
+          city?: string | null;
+          created_at?: string | null;
+          id?: string;
+          poc?: string | null;
+          poc_no?: string | null;
+          priority?: string | null;
+          site_readiness?: string | null;
+          status?: string | null;
+          store_code?: string;
+          store_name?: string | null;
+        };
+        Relationships: [];
+      };
       rate_cards: {
         Row: {
           card_code: string;
@@ -836,7 +836,7 @@ export type Database = {
     };
     Functions: {
       cancel_my_booking: {
-        Args: { _booking_id: string; _message?: string | null };
+        Args: { _booking_id: string };
         Returns: undefined;
       };
       set_user_account_approval: {
