@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Users, ShieldCheck, UserRoundX, UserPlus, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { HardHat, Search, Users, ShieldCheck, UserRoundX, UserPlus, X } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermission";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -591,6 +592,19 @@ export function UserRoleAssignment() {
 
                         <td className="px-5 py-4">
                           <div className="flex justify-end gap-2">
+                            {auth.hasRole("super_admin") &&
+                              assignedRoles.some((role) => role.slug === "engineer") && (
+                                <Link
+                                  to="/admin"
+                                  search={{ tab: "engineers" }}
+                                  aria-label={`Open Engineers & dispatch for ${user.full_name || user.email || "engineer"}`}
+                                  title="Open Engineers & dispatch"
+                                  className="inline-flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                                >
+                                  <HardHat size={14} />
+                                  Engineers &amp; dispatch
+                                </Link>
+                              )}
                             {canApproveUsers &&
                               (user.status === "pending" || user.status === "rejected") && (
                                 <>
