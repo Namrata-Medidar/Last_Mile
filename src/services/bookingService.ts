@@ -6,10 +6,12 @@ import type { TablesUpdate } from "@/integrations/supabase/types";
 /** Shape the existing order screens already use. */
 export type Ticket = {
   dbId: string;
+  customerId: string;
   id: string;
   title: string;
   status: "Open" | "In Progress" | "Closed" | "Cancelled";
   priority: string;
+  engineerId: string | null;
   engineer: string;
   assigneePhone: string;
   updated: string;
@@ -20,9 +22,15 @@ export type Ticket = {
   lastContact?: string;
   total: number | null;
   rating: number | null;
+  createdAt?: string;
+  visitDate?: string;
+  visitTime?: string;
+  siteLocation?: string;
 };
 
-export type TicketUpdate = Partial<Pick<Ticket, "status" | "engineer" | "assigneePhone" | "progress" | "lastContact">>;
+export type TicketUpdate = Partial<
+  Pick<Ticket, "status" | "engineerId" | "engineer" | "assigneePhone" | "progress" | "lastContact">
+>;
 
 export type NewBooking = {
   clientRequestId?: string;
@@ -65,28 +73,61 @@ function ago(iso: string): string {
 }
 
 type Row = {
-  id: string; ticket_no: string; title: string; status: string; priority: string; engineer_name: string;
-  engineer_phone: string | null; updated_at: string; city: string | null; customer_name: string | null;
-  progress: number; last_contact: string | null; total: number | null; customer_rating: number | null;
+  id: string;
+  customer_id: string;
+  ticket_no: string;
+  title: string;
+  status: string;
+  priority: string;
+  engineer_id: string | null;
+  engineer_name: string;
+  engineer_phone: string | null;
+  updated_at: string;
+  city: string | null;
+  customer_name: string | null;
+  progress: number;
+  last_contact: string | null;
+  total: number | null;
+  customer_rating: number | null;
+  created_at?: string;
+  details?: unknown;
 };
 
-const toTicket = (r: Row): Ticket => ({
-  dbId: r.id,
-  id: r.ticket_no,
-  title: r.title,
-  status: r.status as Ticket["status"],
-  priority: r.priority,
-  engineer: r.engineer_name,
-  assigneePhone: r.engineer_phone ?? "",
-  updated: ago(r.updated_at),
-  city: r.city ?? "",
-  customer: r.customer_name ?? "",
-  progress: r.progress,
-  unreadComments: 0,
-  ...(r.last_contact ? { lastContact: r.last_contact } : {}),
-  total: r.total,
-  rating: r.customer_rating,
-});
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const toTicket = (r: Row): Ticket => {
+  const details = isRecord(r.details) ? r.details : {};
+  const visitDate = typeof details["start_date"] === "string" ? details["start_date"] : undefined;
+  const visitTime = typeof details["startTime"] === "string" ? details["startTime"] : undefined;
+  const site = isRecord(details["site"]) ? details["site"] : {};
+  const siteLocation = typeof site["address"] === "string" ? site["address"] : undefined;
+
+  return {
+    dbId: r.id,
+    customerId: r.customer_id,
+    id: r.ticket_no,
+    title: r.title,
+    status: r.status as Ticket["status"],
+    priority: r.priority,
+    engineerId: r.engineer_id,
+    engineer: r.engineer_name,
+    assigneePhone: r.engineer_phone ?? "",
+    updated: ago(r.updated_at),
+    city: r.city ?? "",
+    customer: r.customer_name ?? "",
+    progress: r.progress,
+    unreadComments: 0,
+    ...(r.last_contact ? { lastContact: r.last_contact } : {}),
+    ...(visitDate ? { visitDate } : {}),
+    ...(visitTime ? { visitTime } : {}),
+    ...(siteLocation ? { siteLocation } : {}),
+    total: r.total,
+    rating: r.customer_rating,
+    ...(r.created_at ? { createdAt: r.created_at } : {}),
+  };
+};
 
 export const ticketsQuery = (userId: string | null) =>
   queryOptions({
@@ -96,7 +137,9 @@ export const ticketsQuery = (userId: string | null) =>
     queryFn: async (): Promise<Ticket[]> => {
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, ticket_no, title, status, priority, engineer_name, engineer_phone, updated_at, city, customer_name, progress, last_contact, total, customer_rating")
+        .select(
+          "id, customer_id, ticket_no, title, status, priority, engineer_id, engineer_name, engineer_phone, updated_at, created_at, city, customer_name, progress, last_contact, total, customer_rating, details",
+        )
         .order("created_at", { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -121,15 +164,25 @@ export const commentsQuery = (userId: string | null) =>
         const key = (c.bookings as { ticket_no: string } | null)?.ticket_no;
         if (!key) continue;
         const bucket = (out[key] ??= { public: [], internal: [] });
-        bucket[c.visibility as "public" | "internal"].push({ sender: c.author_name, role: c.author_role, text: c.body, time: ago(c.created_at) });
+        bucket[c.visibility as "public" | "internal"].push({
+          sender: c.author_name,
+          role: c.author_role,
+          text: c.body,
+          time: ago(c.created_at),
+        });
       }
       return out;
     },
   });
 
 export const bookingService = {
-  async create(customerId: string, b: NewBooking, profile: { company?: string | null; address?: string | null }): Promise<Ticket> {
-    const selectFields = "id, ticket_no, title, status, priority, engineer_name, engineer_phone, updated_at, city, customer_name, progress, last_contact, total, customer_rating";
+  async create(
+    customerId: string,
+    b: NewBooking,
+    profile: { company?: string | null; address?: string | null },
+  ): Promise<Ticket> {
+    const selectFields =
+      "id, customer_id, ticket_no, title, status, priority, engineer_id, engineer_name, engineer_phone, updated_at, created_at, city, customer_name, progress, last_contact, total, customer_rating, details";
     const findByRequestId = async (): Promise<Ticket | null> => {
       if (!b.clientRequestId) return null;
       const { data, error } = await supabase
@@ -193,7 +246,10 @@ export const bookingService = {
     }
     return toTicket(data);
   },
-  async createSample(customerId: string, sample: { title: string; priority: string; city: string; customer: string }): Promise<void> {
+  async createSample(
+    customerId: string,
+    sample: { title: string; priority: string; city: string; customer: string },
+  ): Promise<void> {
     const { error } = await supabase.from("bookings").insert({
       customer_id: customerId,
       title: sample.title,
@@ -214,15 +270,14 @@ export const bookingService = {
     const { error } = await supabase.from("bookings").update(patch).eq("id", dbId);
     if (error) throw error;
   },
-  async assign(
-    dbId: string,
-    assignee: { engineer: string; assigneePhone: string },
-  ): Promise<void> {
-    const { error } = await supabase.rpc("assign_booking_assignee", {
-      _booking_id: dbId,
-      _engineer_name: assignee.engineer,
-      _engineer_phone: assignee.assigneePhone,
-    });
+  async assign(dbId: string, engineerId: string | null): Promise<void> {
+    const { error } = await supabase.rpc(
+      "assign_booking_engineer" as never,
+      {
+        _booking_id: dbId,
+        _engineer_id: engineerId,
+      } as never,
+    );
     if (error) throw error;
   },
   async close(dbId: string): Promise<void> {
@@ -231,8 +286,25 @@ export const bookingService = {
     });
     if (error) throw error;
   },
-  async comment(dbId: string, visibility: "public" | "internal", body: string, author: { name: string; role: string }): Promise<void> {
-    const { error } = await supabase.from("booking_comments").insert({ booking_id: dbId, visibility, body: body.slice(0, 4000), author_name: author.name, author_role: author.role });
+  async cancel(dbId: string): Promise<void> {
+    const { error } = await supabase.rpc("cancel_my_booking", {
+      _booking_id: dbId,
+    });
+    if (error) throw error;
+  },
+  async comment(
+    dbId: string,
+    visibility: "public" | "internal",
+    body: string,
+    author: { name: string; role: string },
+  ): Promise<void> {
+    const { error } = await supabase.from("booking_comments").insert({
+      booking_id: dbId,
+      visibility,
+      body: body.slice(0, 4000),
+      author_name: author.name,
+      author_role: author.role,
+    });
     if (error) throw error;
   },
 };
@@ -244,9 +316,17 @@ export function useBookingsRealtime(userId: string | null) {
     if (!userId) return;
     const channel = supabase
       .channel(`bookings-${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => qc.invalidateQueries({ queryKey: ["bookings", userId] }))
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "booking_comments" }, () => qc.invalidateQueries({ queryKey: ["booking-comments", userId] }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () =>
+        qc.invalidateQueries({ queryKey: ["bookings", userId] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "booking_comments" },
+        () => qc.invalidateQueries({ queryKey: ["booking-comments", userId] }),
+      )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userId, qc]);
 }

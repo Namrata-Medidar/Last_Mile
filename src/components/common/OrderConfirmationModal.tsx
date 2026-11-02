@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, Clock3, MapPin, UserRound } from "lucide-react";
+import { CalendarDays, CheckCircle2, MapPin, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Ticket } from "@/services/bookingService";
 
@@ -9,6 +9,7 @@ type OrderConfirmationModalProps = {
 
 export function OrderConfirmationModal({ ticket, onConfirm }: OrderConfirmationModalProps) {
   const isAssigned = ticket.engineer && ticket.engineer !== "Unassigned";
+  const location = ticket.city || ticket.siteLocation || "Not provided";
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-overlay/60 p-4">
@@ -16,7 +17,7 @@ export function OrderConfirmationModal({ ticket, onConfirm }: OrderConfirmationM
         <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-success/15 text-success">
           <CheckCircle2 className="h-9 w-9" />
         </span>
-        <h2 className="mt-4 text-xl font-semibold text-success">Order completed</h2>
+        <h2 className="mt-4 text-xl font-semibold text-success">Booking completed</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Your service request has been placed successfully and is now in our queue.
         </p>
@@ -54,16 +55,11 @@ export function OrderConfirmationModal({ ticket, onConfirm }: OrderConfirmationM
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2 text-left text-xs">
+        <div className="mt-4 grid grid-cols-2 gap-2 text-left text-xs">
           <div className="rounded-md border border-border bg-surface/40 p-3">
             <MapPin className="h-4 w-4 text-primary" />
-            <p className="mt-2 font-semibold">{ticket.city}</p>
+            <p className="mt-2 font-semibold">{location}</p>
             <p className="mt-0.5 text-muted-foreground">Location</p>
-          </div>
-          <div className="rounded-md border border-border bg-surface/40 p-3">
-            <Clock3 className="h-4 w-4 text-primary" />
-            <p className="mt-2 font-semibold">15-20 minutes</p>
-            <p className="mt-0.5 text-muted-foreground">Est. assignment</p>
           </div>
           <div className="rounded-md border border-border bg-surface/40 p-3">
             <CalendarDays className="h-4 w-4 text-primary" />
@@ -78,8 +74,8 @@ export function OrderConfirmationModal({ ticket, onConfirm }: OrderConfirmationM
           </span>
           <p className="text-xs leading-5 text-muted-foreground">
             {isAssigned
-              ? `${ticket.engineer} has been assigned and will reach out shortly.`
-              : "Our team is matching your request with the nearest qualified engineer."}
+              ? `${ticket.engineer} has been assigned to your booking.`
+              : "Your booking is awaiting engineer assignment."}
           </p>
         </div>
 

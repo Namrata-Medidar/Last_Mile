@@ -16,6 +16,7 @@ export type Engineer = {
   max_active_jobs: number;
   rating: number;
   ratings_count: number;
+  status: string;
 };
 
 export type Job = {
@@ -34,7 +35,7 @@ export type Job = {
   created_at: string;
 };
 
-const ENGINEER_COLS = "id, user_id, full_name, phone, grade, mode, city, kit, approval_status, available, max_active_jobs, rating, ratings_count";
+const ENGINEER_COLS = "id, user_id, full_name, phone, grade, mode, city, kit, approval_status, available, max_active_jobs, rating, ratings_count, status";
 
 export const myEngineerQuery = (userId: string | null) =>
   queryOptions({
@@ -59,6 +60,24 @@ export const myJobsQuery = (engineerId: string | null) =>
         .eq("engineer_id", engineerId!)
         .order("created_at", { ascending: false })
         .limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+export const engineerCancellationMessagesQuery = (engineerId: string | null) =>
+  queryOptions({
+    queryKey: ["engineer", "cancellation-messages", engineerId],
+    enabled: Boolean(engineerId),
+    queryFn: async () => {
+      if (!engineerId) return [];
+      const { data, error } = await supabase
+        .from("booking_comments")
+        .select("booking_id, body, created_at, bookings!inner(engineer_id)")
+        .eq("visibility", "public")
+        .like("body", "Cancellation message:%")
+        .eq("bookings.engineer_id", engineerId)
+        .order("created_at", { ascending: true });
       if (error) throw error;
       return data ?? [];
     },
@@ -141,6 +160,9 @@ export function useEngineerRealtime(key: string) {
     const channel = supabase
       .channel(`engineer-${key}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => qc.invalidateQueries({ queryKey: ["engineer"] }))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "booking_comments" }, () => {
+        qc.invalidateQueries({ queryKey: ["engineer", "cancellation-messages"] });
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "engineers" }, () => {
         qc.invalidateQueries({ queryKey: ["engineer"] });
         qc.invalidateQueries({ queryKey: ["engineers"] });
