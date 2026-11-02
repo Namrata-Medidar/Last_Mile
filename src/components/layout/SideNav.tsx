@@ -1,13 +1,5 @@
 import { jsx, jsxs } from "react/jsx-runtime";
-import {
-  Boxes,
-  ClipboardCheck,
-  HardHat,
-  Network,
-  RadioTower,
-  Radar,
-  Ticket,
-} from "lucide-react";
+import { Boxes, ClipboardCheck, HardHat, Network, RadioTower, Radar, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UsersRound, UserRound, ChevronDown } from "lucide-react";
 const fieldEngineer = {
@@ -47,10 +39,7 @@ function SideNav({
   canViewCustomerPortal?: boolean;
 }) {
   const canAccessWorkspace = canViewCustomerPortal || canUseTeam;
-  const hasSidebarContent =
-    canAccessWorkspace ||
-    canViewFieldEngineer ||
-    canViewUpcomingFeatures;
+  const hasSidebarContent = canAccessWorkspace || canViewFieldEngineer || canViewUpcomingFeatures;
 
   if (!hasSidebarContent) return null;
 
@@ -72,9 +61,7 @@ function SideNav({
             }`}
           >
             <HardHat
-              className={`h-4 w-4 ${
-                activeService === fieldEngineer.title ? "text-primary" : ""
-              }`}
+              className={`h-4 w-4 ${activeService === fieldEngineer.title ? "text-primary" : ""}`}
             />
             {fieldEngineer.title}
           </Button>
@@ -89,23 +76,16 @@ function SideNav({
 
             {/* Other services */}
             {upcomingFeatures.map((item) => {
-              const active = activeService === item.title;
-
               return (
                 <Button
                   key={item.title}
                   type="button"
                   variant="ghost"
-                  onClick={() => onServiceSelect?.(item.title)}
-                  className={`h-10 w-full justify-start px-3 text-xs ${
-                    active
-                      ? "bg-primary/15 text-foreground shadow-[inset_2px_0_0_0_var(--color-primary)]"
-                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  }`}
+                  disabled
+                  aria-label={`${item.title} (coming soon)`}
+                  className="h-10 w-full cursor-not-allowed justify-start px-3 text-xs text-sidebar-foreground/50 opacity-60"
                 >
-                  <item.icon
-                    className={`h-4 w-4 ${active ? "text-primary" : ""}`}
-                  />
+                  <item.icon className="h-4 w-4" />
                   {item.title}
                 </Button>
               );
