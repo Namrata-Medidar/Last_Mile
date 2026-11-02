@@ -596,6 +596,48 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_details: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string | null
+          id: string
+          poc: string | null
+          poc_no: string | null
+          priority: string | null
+          site_readiness: string | null
+          status: string | null
+          store_code: string
+          store_name: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string | null
+          id?: string
+          poc?: string | null
+          poc_no?: string | null
+          priority?: string | null
+          site_readiness?: string | null
+          status?: string | null
+          store_code: string
+          store_name?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string | null
+          id?: string
+          poc?: string | null
+          poc_no?: string | null
+          priority?: string | null
+          site_readiness?: string | null
+          status?: string | null
+          store_code?: string
+          store_name?: string | null
+        }
+        Relationships: []
+      }
       rate_cards: {
         Row: {
           card_code: string
