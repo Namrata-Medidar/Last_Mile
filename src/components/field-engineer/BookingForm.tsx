@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CircleHelp } from "lucide-react";
 import { panel, label, money } from "@/components/common/ui";
@@ -12,8 +12,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useAuth } from "@/hooks/use-auth";
 import { computeQuote, PRIORITIES } from "@/lib/pricing";
 import { customerSitesQuery } from "@/services/customerDetailsService";
+import { userService } from "@/services/userService";
 import { PricingRulebook } from "./PricingRulebook";
 
 type EngineerLevel = "L1" | "L2" | "L1 + L2";
@@ -54,9 +56,16 @@ type BookingFormProps = {
 export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [customerType, setCustomerType] = useState<"existing" | "new">("existing");
+  const { userId } = useAuth();
+  const profileQuery = useQuery({
+    queryKey: ["profile", userId],
+    enabled: customerType === "existing" && Boolean(userId),
+    queryFn: () => userService.getProfile(userId!),
+  });
+  const company = profileQuery.data?.company?.trim() ?? "";
   const customerSites = useQuery({
-    ...customerSitesQuery,
-    enabled: customerType === "existing",
+    ...customerSitesQuery(company),
+    enabled: customerType === "existing" && Boolean(company),
   });
   const [selectedSiteId, setSelectedSiteId] = useState("");
   const [level, setLevel] = useState<EngineerLevel | "">("");
@@ -72,6 +81,12 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
   const [pocs, setPocs] = useState<PointOfContact[]>([emptyPointOfContact()]);
   const [issueDescription, setIssueDescription] = useState("");
   const [workInstructions, setWorkInstructions] = useState("");
+  useEffect(() => {
+    if (customerType !== "existing") return;
+    setSelectedSiteId("");
+    setSite({ code: "", name: "", address: "" });
+    setPocs([emptyPointOfContact()]);
+  }, [company, customerType]);
   const urgent = priority === "P0";
   const chooseLevel = (nextLevel: EngineerLevel | "") => {
     setLevel(nextLevel);
@@ -269,13 +284,21 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
                 required
               >
                 <option value="">
-                  {customerSites.isPending
-                    ? "Loading sites…"
-                    : customerSites.isError
-                      ? "Could not load sites"
-                    : customerSites.data?.length
-                      ? "Select a site"
-                      : "No sites available"}
+                  {!userId
+                    ? "Sign in to view customer sites"
+                    : profileQuery.isPending
+                      ? "Loading your profile…"
+                      : profileQuery.isError
+                        ? "Could not load your profile"
+                        : !company
+                          ? "No company is set on your profile"
+                          : customerSites.isPending
+                            ? "Loading sites…"
+                            : customerSites.isError
+                              ? "Could not load sites"
+                              : customerSites.data?.length
+                                ? "Select a site"
+                                : "No sites available"}
                 </option>
                 {customerSites.data?.map((customerSite) => (
                   <option key={customerSite.id} value={customerSite.id}>
@@ -283,6 +306,11 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
                   </option>
                 ))}
               </select>
+              {profileQuery.isError && (
+                <span role="alert" className="mt-1 block text-xs text-destructive">
+                  Could not load your profile: {profileQuery.error.message}
+                </span>
+              )}
               {customerSites.isError && (
                 <span role="alert" className="mt-1 block text-xs text-destructive">
                   Could not load customer sites: {customerSites.error.message}
