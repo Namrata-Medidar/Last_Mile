@@ -16,6 +16,7 @@ export type Engineer = {
   max_active_jobs: number;
   rating: number;
   ratings_count: number;
+  status: string;
 };
 
 export type Job = {
@@ -34,7 +35,7 @@ export type Job = {
   created_at: string;
 };
 
-const ENGINEER_COLS = "id, user_id, full_name, phone, grade, mode, city, kit, approval_status, available, max_active_jobs, rating, ratings_count";
+const ENGINEER_COLS = "id, user_id, full_name, phone, grade, mode, city, kit, approval_status, available, max_active_jobs, rating, ratings_count, status";
 
 export const myEngineerQuery = (userId: string | null) =>
   queryOptions({

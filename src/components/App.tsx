@@ -28,6 +28,11 @@ import { MyBookings } from "@/components/bookings/MyBookings";
 import { OrderConfirmationModal } from "@/components/common/OrderConfirmationModal";
 import { ProjectSettings } from "@/components/project/ProjectSettings";
 import type { CatalogService } from "@/services/catalogService";
+import { authService } from "@/services/authService";
+import {
+  cancellationPolicyQuery,
+  type CancellationPolicy,
+} from "@/services/cancellationPolicyService";
 
 export type AppPage =
   | "marketplace"
@@ -199,6 +204,7 @@ export function App({
   const [modal, setModal] = useState<CatalogService | null>(null);
   const [bookingFlow, setBookingFlow] = useState<BookingFlow | null>(null);
   const [flowReady, setFlowReady] = useState(false);
+  const [isCheckingApproval, setIsCheckingApproval] = useState(false);
   const requestRef = useRef<PendingBookingRequest | null>(null);
   const createInProgress = useRef(false);
   const auth = useAuth();
@@ -207,6 +213,7 @@ export function App({
   const qc = useQueryClient();
   const userId = auth.userId;
   const servicesResult = useQuery(servicesQuery);
+  const cancellationPolicyResult = useQuery(cancellationPolicyQuery(userId));
   const ticketsResult = useQuery(ticketsQuery(userId));
   const customerTickets = userId ? (ticketsResult.data ?? []) : [];
   const commentsResult = useQuery(commentsQuery(userId));
@@ -364,10 +371,7 @@ export function App({
     if (!ticket) return false;
     try {
       if (action === "assignee") {
-        await bookingService.assign(ticket.dbId, {
-          engineer: update.engineer ?? ticket.engineer,
-          assigneePhone: update.assigneePhone ?? ticket.assigneePhone,
-        });
+        await bookingService.assign(ticket.dbId, update.engineerId ?? null);
       } else if (action === "close") {
         await bookingService.close(ticket.dbId);
       } else {
@@ -375,11 +379,27 @@ export function App({
       }
       refreshTickets();
       return true;
-    } catch {
-      toast.error("Update failed — you may not have permission.");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unexpected database error.";
+      toast.error(
+        action === "assignee"
+          ? `Engineer assignment failed: ${detail}`
+          : `Ticket update failed: ${detail}`,
+      );
       refreshTickets();
       return false;
     }
+  };
+
+  const cancelTicket = async (ticketId: string, message: string): Promise<void> => {
+    const ticket = customerTickets.find((item) => item.id === ticketId);
+    if (!ticket?.dbId)
+      throw new Error("Could not find this booking. Refresh My Orders and try again.");
+    await bookingService.cancel(ticket.dbId, message);
+    await Promise.all([
+      refreshTickets(),
+      qc.invalidateQueries({ queryKey: ["booking-comments", userId] }),
+    ]);
   };
 
   const addComment = async (ticketNo: string, visibility: "public" | "internal", text: string) => {
@@ -436,6 +456,133 @@ export function App({
   const addNotification = (notification: { title: string; detail: string }): void => {
     toast(notification.title, { description: notification.detail });
   };
+
+  if (userId && !auth.profileReady) {
+    return (
+      <div className="grid min-h-screen place-items-center p-6 text-sm text-muted-foreground">
+        Loading your account status…
+      </div>
+    );
+  }
+
+  if (userId && (auth.profileError || !auth.profile)) {
+    return (
+      <div className="grid min-h-screen place-items-center p-6 text-center">
+        <div className="space-y-3">
+          <p role="alert" className="text-sm text-destructive">
+            {auth.profileError
+              ? "Your account status could not be verified."
+              : "Your account profile could not be found."}{" "}
+            Retry the lookup or sign out and contact support.
+          </p>
+          <button
+            type="button"
+            className="mr-4 underline"
+            disabled={isCheckingApproval}
+            onClick={async () => {
+              setIsCheckingApproval(true);
+              try {
+                await qc.refetchQueries(
+                  {
+                    queryKey: ["profile", userId],
+                  },
+                  {
+                    throwOnError: true,
+                  },
+                );
+              } catch (error) {
+                toast.error(
+                  `Could not check account status: ${error instanceof Error ? error.message : "Unknown error"}`,
+                );
+              } finally {
+                setIsCheckingApproval(false);
+              }
+            }}
+          >
+            {isCheckingApproval ? "Checking…" : "Retry"}
+          </button>
+          <button
+            type="button"
+            className="underline"
+            onClick={async () => {
+              const { error } = await authService.signOut();
+              if (error) toast.error(`Could not sign out: ${error.message}`);
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (userId && auth.profile?.status !== "active") {
+    const isRejected = auth.profile?.status === "rejected";
+    return (
+      <div className="grid min-h-screen place-items-center p-6 text-center">
+        <div className="max-w-md space-y-3 rounded-lg border border-border bg-card p-6">
+          <h1 className="text-xl font-semibold">
+            {isRejected ? "Account access rejected" : "Account pending approval"}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {isRejected
+              ? "Your account was not approved. Contact the super administrator if you believe this is incorrect."
+              : "A super administrator must approve your account before you can access bookings or account permissions."}
+          </p>
+          <div className="flex justify-center gap-4">
+            <button
+              type="button"
+              className="text-sm underline"
+              disabled={isCheckingApproval}
+              onClick={async () => {
+                setIsCheckingApproval(true);
+                try {
+                  await Promise.all([
+                    qc.refetchQueries(
+                      {
+                        queryKey: ["profile", userId],
+                      },
+                      {
+                        throwOnError: true,
+                      },
+                    ),
+                    qc.refetchQueries(
+                      {
+                        queryKey: ["roles", userId],
+                      },
+                      {
+                        throwOnError: true,
+                      },
+                    ),
+                  ]);
+                } catch (error) {
+                  toast.error(
+                    `Could not check approval status: ${error instanceof Error ? error.message : "Unknown error"}`,
+                  );
+                } finally {
+                  setIsCheckingApproval(false);
+                }
+              }}
+            >
+              {isCheckingApproval ? "Checking…" : "Check approval status"}
+            </button>
+            <button
+              type="button"
+              className="text-sm underline"
+              onClick={async () => {
+                const { error } = await authService.signOut();
+                if (error) toast.error(`Could not sign out: ${error.message}`);
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const cancellationPolicy: CancellationPolicy | null = cancellationPolicyResult.data ?? null;
   const activeService =
     page === "booking" || category === "Field Engineer" ? "Field Engineer Support" : category;
   const showServiceNav = page !== "bookings" && !isProjectPage;
@@ -481,13 +628,34 @@ export function App({
       {page === "marketplace" && (
         <Marketplace category={category} services={visibleServices} onDetails={setModal} />
       )}
-      {page === "booking" && <BookingForm onBack={goHome} onSubmit={createTicket} />}
+      {page === "booking" && (
+        <BookingForm
+          onBack={goHome}
+          onSubmit={createTicket}
+          cancellationPolicy={cancellationPolicy}
+          cancellationPolicyLoading={cancellationPolicyResult.isLoading}
+          cancellationPolicyError={
+            cancellationPolicyResult.error instanceof Error
+              ? cancellationPolicyResult.error.message
+              : null
+          }
+          onRetryCancellationPolicy={() => void cancellationPolicyResult.refetch()}
+        />
+      )}
       {page === "bookings" && (
         <MyBookings
           onBack={goHome}
           customerTickets={customerTickets}
           comments={commentsResult.data}
           onUpdateTicket={updateTicket}
+          onCancelTicket={cancelTicket}
+          cancellationPolicy={cancellationPolicy}
+          cancellationPolicyLoading={cancellationPolicyResult.isLoading}
+          cancellationPolicyError={
+            cancellationPolicyResult.error instanceof Error
+              ? cancellationPolicyResult.error.message
+              : null
+          }
           onComment={addComment}
           loading={ticketsResult.isLoading}
           mode="customer"

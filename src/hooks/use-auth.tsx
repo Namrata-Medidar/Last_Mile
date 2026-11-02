@@ -12,6 +12,8 @@ type AuthState = {
   userId: string | null;
   email: string | null;
   profile: Profile | null;
+  profileReady: boolean;
+  profileError: Error | null;
   roles: AppRole[];
   hasRole: (role: AppRole) => boolean;
   isStaff: boolean;
@@ -57,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId,
         email: session?.user.email ?? null,
         profile: userId ? (profile.data ?? null) : null,
+        profileReady: !userId || !profile.isLoading,
+        profileError: profile.error instanceof Error ? profile.error : null,
         roles: roleList,
         hasRole: (r) => roleList.includes(r),
         isStaff: isStaff(roleList),

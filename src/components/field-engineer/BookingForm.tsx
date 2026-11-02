@@ -13,6 +13,10 @@ import {
 } from "@/components/ui/sheet";
 import { computeQuote, PRIORITIES } from "@/lib/pricing";
 import { PricingRulebook } from "./PricingRulebook";
+import {
+  cancellationWindowDescription,
+  type CancellationPolicy,
+} from "@/services/cancellationPolicyService";
 
 type EngineerLevel = "L1" | "L2" | "L1 + L2";
 type PriorityCode = keyof typeof PRIORITIES;
@@ -27,6 +31,10 @@ const emptyPointOfContact = (): PointOfContact => ({ name: "", mobile: "" });
 
 type BookingFormProps = {
   onBack: () => void;
+  cancellationPolicy: CancellationPolicy | null;
+  cancellationPolicyLoading: boolean;
+  cancellationPolicyError: string | null;
+  onRetryCancellationPolicy: () => void;
   onSubmit: (booking: {
     customerType: "existing" | "new";
     level: EngineerLevel;
@@ -48,7 +56,14 @@ type BookingFormProps = {
   }) => void | Promise<void>;
 };
 
-export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
+export function BookingForm({
+  onBack,
+  onSubmit,
+  cancellationPolicy,
+  cancellationPolicyLoading,
+  cancellationPolicyError,
+  onRetryCancellationPolicy,
+}: BookingFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [customerType, setCustomerType] = useState<"existing" | "new">("existing");
   const [level, setLevel] = useState<EngineerLevel | "">("");
@@ -120,7 +135,7 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
   const totalPayable = quote ? Math.max(0, Math.round(quote.total)) : null;
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-5 pb-6"> 
+    <div className="mx-auto max-w-[1100px] space-y-5 pb-6">
       <div className="flex items-end justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase text-primary">Field engineer support</p>
@@ -400,6 +415,30 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
 
       {level && <PricingRulebook level={level} />}
 
+      <section className={`${panel} space-y-1`}>
+        <h2 className="text-sm font-semibold">Cancellation terms</h2>
+        {cancellationPolicyLoading ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            Loading your cancellation terms…
+          </p>
+        ) : cancellationPolicyError ? (
+          <p role="alert" className="text-xs text-destructive">
+            Cancellation terms could not be loaded: {cancellationPolicyError}{" "}
+            <button type="button" className="underline" onClick={onRetryCancellationPolicy}>
+              Retry
+            </button>
+          </p>
+        ) : cancellationPolicy ? (
+          <p className="text-xs text-muted-foreground">
+            Cancellation fee:{" "}
+            <span className="font-semibold text-foreground">{money(cancellationPolicy.fee)}</span>{" "}
+            applies {cancellationWindowDescription(cancellationPolicy)}.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Sign in to view your cancellation terms.</p>
+        )}
+      </section>
+
       <section className={`${panel} sticky bottom-4 z-10 shadow-lg`}>
         <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1 text-xs">
@@ -419,11 +458,15 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
           <div className="flex items-center gap-4 border-t border-border pt-3 sm:border-t-0 sm:border-l sm:pl-4 sm:pt-0">
             <div>
               <p className="text-[10px] text-muted-foreground">Total payable</p>
-              <p className="text-lg font-semibold text-primary">{totalPayable === null ? "—" : money(totalPayable)}</p>
+              <p className="text-lg font-semibold text-primary">
+                {totalPayable === null ? "—" : money(totalPayable)}
+              </p>
             </div>
             <Button
               disabled={
                 submitting ||
+                cancellationPolicyLoading ||
+                Boolean(cancellationPolicyError) ||
                 !validDates ||
                 !validSite ||
                 !issueDescription.trim() ||
