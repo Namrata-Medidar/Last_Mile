@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CircleHelp } from "lucide-react";
 import { panel, label, money } from "@/components/common/ui";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { computeQuote, PRIORITIES } from "@/lib/pricing";
+import { customerSitesQuery } from "@/services/customerDetailsService";
 import { PricingRulebook } from "./PricingRulebook";
 import {
   cancellationWindowDescription,
@@ -23,6 +25,7 @@ type PriorityCode = keyof typeof PRIORITIES;
 type BookingHours = 4 | 8;
 type PointOfContact = { name: string; mobile: string };
 type SiteDetails = {
+  id?: string;
   code: string;
   name: string;
   address: string;
@@ -66,6 +69,11 @@ export function BookingForm({
 }: BookingFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [customerType, setCustomerType] = useState<"existing" | "new">("existing");
+  const customerSites = useQuery({
+    ...customerSitesQuery,
+    enabled: customerType === "existing",
+  });
+  const [selectedSiteId, setSelectedSiteId] = useState("");
   const [level, setLevel] = useState<EngineerLevel | "">("");
   const [count, setCount] = useState(1);
   const [priority, setPriority] = useState<PriorityCode | "">("");
@@ -93,6 +101,7 @@ export function BookingForm({
     setSite((currentSite) => ({ ...currentSite, [key]: value }));
   };
   const resetBookingFields = () => {
+    setSelectedSiteId("");
     setLevel("");
     setCount(1);
     setPriority("");
@@ -115,7 +124,28 @@ export function BookingForm({
       ? Math.floor((Date.parse(endDate) - Date.parse(startDate)) / 86_400_000) + 1
       : 0;
   const validDates = dayCount > 0;
-  const validSite = Object.values(site).every((value) => value.trim().length > 0);
+  const validSite =
+    site.code.trim().length > 0 &&
+    site.name.trim().length > 0 &&
+    site.address.trim().length > 0 &&
+    (customerType === "new" || Boolean(site.id));
+  const selectSite = (siteId: string) => {
+    setSelectedSiteId(siteId);
+    const selectedSite = customerSites.data?.find((candidate) => candidate.id === siteId);
+    if (!selectedSite) {
+      setSite({ code: "", name: "", address: "" });
+      setPocs([emptyPointOfContact()]);
+      return;
+    }
+
+    setSite({
+      id: selectedSite.id,
+      code: selectedSite.store_code,
+      name: selectedSite.store_name ?? "",
+      address: selectedSite.address ?? "",
+    });
+    setPocs([{ name: selectedSite.poc ?? "", mobile: selectedSite.poc_no ?? "" }]);
+  };
   const startHour = Number(startTime.split(":")[0]);
   const quote =
     level && priority && hours
@@ -244,30 +274,66 @@ export function BookingForm({
           </SheetContent>
         </Sheet>
         <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          <label>
-            <span className={label}>Site code *</span>
-            <Input
-              value={site.code}
-              onChange={(event) => updateSite("code", event.target.value)}
-              placeholder="Enter site code"
-              required
-            />
-          </label>
-          <label>
-            <span className={label}>Site name *</span>
-            <Input
-              value={site.name}
-              onChange={(event) => updateSite("name", event.target.value)}
-              placeholder="Enter site name"
-              required
-            />
-          </label>
+          {customerType === "existing" && (
+            <label className="sm:col-span-2">
+              <span className={label}>Site *</span>
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={selectedSiteId}
+                onChange={(event) => selectSite(event.target.value)}
+                required
+              >
+                <option value="">
+                  {customerSites.isPending
+                    ? "Loading sites…"
+                    : customerSites.isError
+                      ? "Could not load sites"
+                    : customerSites.data?.length
+                      ? "Select a site"
+                      : "No sites available"}
+                </option>
+                {customerSites.data?.map((customerSite) => (
+                  <option key={customerSite.id} value={customerSite.id}>
+                    {customerSite.store_code} - {customerSite.store_name ?? ""}
+                  </option>
+                ))}
+              </select>
+              {customerSites.isError && (
+                <span role="alert" className="mt-1 block text-xs text-destructive">
+                  Could not load customer sites: {customerSites.error.message}
+                </span>
+              )}
+            </label>
+          )}
+          {customerType === "new" && (
+            <>
+              <label>
+                <span className={label}>Site code *</span>
+                <Input
+                  value={site.code}
+                  onChange={(event) => updateSite("code", event.target.value)}
+                  placeholder="Enter site code"
+                  required
+                />
+              </label>
+              <label>
+                <span className={label}>Site name *</span>
+                <Input
+                  value={site.name}
+                  onChange={(event) => updateSite("name", event.target.value)}
+                  placeholder="Enter site name"
+                  required
+                />
+              </label>
+            </>
+          )}
           <label>
             <span className={label}>Site address *</span>
             <Input
               value={site.address}
               onChange={(event) => updateSite("address", event.target.value)}
               placeholder="Enter site address"
+              readOnly={customerType === "existing"}
               required
             />
           </label>
@@ -286,13 +352,15 @@ export function BookingForm({
         <section className={panel}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Site contacts</h2>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setPocs((currentPocs) => [...currentPocs, { name: "", mobile: "" }])}
-            >
-              Add POC
-            </Button>
+            {customerType === "new" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPocs((currentPocs) => [...currentPocs, { name: "", mobile: "" }])}
+              >
+                Add POC
+              </Button>
+            )}
           </div>
           <div className="mt-4 space-y-3">
             {pocs.map((poc, index) => (
@@ -302,6 +370,7 @@ export function BookingForm({
                   <Input
                     value={poc.name}
                     onChange={(event) => updatePoc(index, "name", event.target.value)}
+                    readOnly={customerType === "existing"}
                   />
                 </label>
                 <label>
@@ -309,6 +378,7 @@ export function BookingForm({
                   <Input
                     value={poc.mobile}
                     onChange={(event) => updatePoc(index, "mobile", event.target.value)}
+                    readOnly={customerType === "existing"}
                   />
                 </label>
               </div>

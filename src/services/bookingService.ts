@@ -54,7 +54,7 @@ export type NewBooking = {
   hours?: number;
   startTime?: string;
   gpsLocation?: string;
-  site?: { code: string; name: string; address: string };
+  site?: { id?: string | null; code: string; name: string; address: string };
   contacts?: { name: string; mobile: string }[];
   issueDescription?: string;
   workInstructions?: string;
@@ -221,6 +221,12 @@ export const bookingService = {
           gpsLocation: b.gpsLocation,
           site: b.site,
           contacts: b.contacts,
+          store_id: b.site?.id ?? null,
+          store_code: b.site?.code ?? "",
+          store_name: b.site?.name ?? "",
+          poc: b.contacts?.[0]?.name ?? "",
+          poc_no: b.contacts?.[0]?.mobile ?? "",
+          address: b.site?.address ?? "",
           issueDescription: b.issueDescription,
           workInstructions: b.workInstructions,
           ...(b.clientRequestId ? { clientRequestId: b.clientRequestId } : {}),
