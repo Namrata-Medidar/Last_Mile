@@ -57,17 +57,38 @@ export const Route = createFileRoute("/_authenticated/admin")({
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
 function AdminPage() {
-  const { isStaff, ready, roles } = useAuth();
+  const { isStaff, roles } = useAuth();
   const { tab } = Route.useSearch();
   const permissions = usePermissions();
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   const isSuperAdmin = roles.includes("super_admin");
 
-  if (ready && roles.length > 0 && !isStaff)
+  if (permissions.isLoading)
+    return (
+      <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
+        Checking admin access…
+      </div>
+    );
+
+  if (permissions.error || !permissions.can("sidebar.admin.view"))
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
         <div>
-          <h1 className="text-xl font-semibold">Staff access only</h1>
+          <h1 className="text-xl font-semibold">
+            {permissions.error ? "Could not check admin access" : "You don’t have access"}
+          </h1>
+          {permissions.error && (
+            <p role="alert" className="mt-2 text-sm text-destructive">
+              {permissions.error instanceof Error
+                ? permissions.error.message
+                : "Permission lookup failed."}
+            </p>
+          )}
+          {permissions.error && (
+            <Button className="mt-3" variant="outline" onClick={() => void permissions.refetch()}>
+              Retry
+            </Button>
+          )}
           <Button asChild variant="link">
             <Link to="/">Back to marketplace</Link>
           </Button>

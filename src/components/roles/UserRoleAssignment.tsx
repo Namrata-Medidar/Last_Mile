@@ -27,6 +27,7 @@ type UserProfile = {
 type UserAssignment = {
   id: string;
   user_id: string;
+  role_id: string | null;
   role: string;
   status: string;
   created_at: string;
@@ -36,7 +37,7 @@ type FilterRole = "All Users" | string;
 type RoleDialogAction = "assign" | "revoke" | null;
 
 function assignmentMatchesRole(assignment: UserAssignment, role: AppRole): boolean {
-  return assignment.role === role.slug;
+  return assignment.role_id === role.id;
 }
 
 export function UserRoleAssignment() {
@@ -115,7 +116,7 @@ export function UserRoleAssignment() {
     queryFn: async (): Promise<UserAssignment[]> => {
       const { data, error } = await supabase
         .from("user_roles")
-        .select("id, user_id, role, status, created_at");
+        .select("id, user_id, role_id, role, status, created_at");
 
       if (error) throw error;
       return (data ?? []) as UserAssignment[];

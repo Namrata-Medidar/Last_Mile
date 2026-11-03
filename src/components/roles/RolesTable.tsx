@@ -221,11 +221,10 @@ export function RolesTable() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-5 py-3 font-medium">Role</th>
-                  <th className="px-5 py-3 font-medium">Slug</th>
                   <th className="px-5 py-3 font-medium">Type</th>
                   <th className="px-5 py-3 font-medium">Permissions</th>
                   <th className="px-5 py-3 text-right font-medium">Actions</th>
@@ -240,12 +239,6 @@ export function RolesTable() {
                       <p className="mt-1 max-w-xs truncate text-xs text-slate-500">
                         {role.description || "No description"}
                       </p>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                        {role.slug}
-                      </code>
                     </td>
 
                     <td className="px-5 py-4">

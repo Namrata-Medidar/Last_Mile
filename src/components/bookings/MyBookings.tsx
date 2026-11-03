@@ -138,7 +138,17 @@ export function MyBookings({
     [allTickets],
   );
   const customerOptions = useMemo(
-    () => ["All", ...new Set(allTickets.map((ticket) => ticket.customer))],
+    () => [
+      { id: "All", label: "All customers" },
+      ...[
+        ...new Map(
+          allTickets.map((ticket) => [
+            ticket.customerId,
+            { id: ticket.customerId, label: ticket.customer || "Unknown customer" },
+          ]),
+        ).values(),
+      ].sort((first, second) => first.label.localeCompare(second.label)),
+    ],
     [allTickets],
   );
   const visibleTickets = useMemo(
@@ -149,7 +159,7 @@ export function MyBookings({
           return (
             (statusFilter === "All" || ticket.status === statusFilter) &&
             (priorityFilter === "All" || ticket.priority === priorityFilter) &&
-            (customerFilter === "All" || ticket.customer === customerFilter) &&
+            (customerFilter === "All" || ticket.customerId === customerFilter) &&
             `${ticket.id} ${ticket.title} ${ticket.customer}`.toLowerCase().includes(query)
           );
         })

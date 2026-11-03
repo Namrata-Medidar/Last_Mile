@@ -28,7 +28,7 @@ export function MyBookingsQueue({
   readTicketIds: string[];
   counts: Record<string, number>;
   priorityCounts: Record<string, number>;
-  customerOptions: string[];
+  customerOptions: { id: string; label: string }[];
   statusFilter: string;
   setStatusFilter: (filter: string) => void;
   customerFilter: string;
@@ -50,9 +50,25 @@ export function MyBookingsQueue({
       <div className="shrink-0 border-b border-border p-3">
         <div>
           <p className="text-sm font-semibold">{isTeam ? "Project queue" : "My orders"}</p>
-          <p className="mt-0.5 text-[10px] text-muted-foreground">
-            {visibleTickets.length} visible {isTeam ? "tickets" : "orders"}
-          </p>
+          {isTeam ? (
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter("All");
+                setCustomerFilter("All");
+                setPriorityFilter("All");
+                setSearch("");
+              }}
+              className="mt-0.5 rounded-sm text-left text-[10px] text-muted-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Show all tickets and clear queue filters"
+            >
+              {visibleTickets.length} visible tickets
+            </button>
+          ) : (
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              {visibleTickets.length} visible orders
+            </p>
+          )}
         </div>
         <div className="mt-3 grid grid-cols-3 gap-1">
           {statuses.map(({ label, style }) => {
@@ -81,7 +97,9 @@ export function MyBookingsQueue({
               className="mb-3 h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
             >
               {customerOptions.map((customer) => (
-                <option key={customer}>{customer}</option>
+                <option key={customer.id} value={customer.id}>
+                  {customer.label}
+                </option>
               ))}
             </select>
             <p className="mb-2 text-[9px] font-semibold uppercase text-muted-foreground">
@@ -123,7 +141,13 @@ export function MyBookingsQueue({
           />
         </div>
       </div>
-      <div className="shrink-0">
+      <div
+        className={
+          isTeam
+            ? "shrink-0"
+            : "queue-scrollbar h-[min(55vh,600px)] min-h-[240px] flex-1 overflow-y-auto overscroll-contain lg:h-auto lg:min-h-0"
+        }
+      >
         {visibleTickets.map((ticket) => {
           const ticketUnreadComments =
             ticket.unreadComments && !readTicketIds.includes(ticket.id) ? ticket.unreadComments : 0;

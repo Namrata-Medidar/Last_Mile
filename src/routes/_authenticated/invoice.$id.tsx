@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,9 +25,25 @@ const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigi
 function InvoicePage() {
   const { id } = Route.useParams();
   const q = useQuery(invoiceQuery(id));
+  const navigate = useNavigate();
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    void navigate({ to: "/bookings" });
+  };
   if (q.isLoading) return <p className="p-10 text-center text-sm text-muted-foreground">Loading…</p>;
   const b = q.data?.booking;
-  if (!b) return <div className="p-10 text-center"><p className="font-semibold">Invoice not found</p><Button asChild variant="link"><Link to="/">Back</Link></Button></div>;
+  if (!b)
+    return (
+      <div className="p-10 text-center">
+        <p className="font-semibold">Invoice not found</p>
+        <Button variant="link" onClick={goBack}>
+          Back
+        </Button>
+      </div>
+    );
   const t = splitGst(Number(b.total ?? 0));
   const balance = Number(b.total ?? 0) - Number(b.amount_paid);
 
@@ -35,7 +51,10 @@ function InvoicePage() {
     <div className="min-h-screen bg-background px-4 py-8">
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="flex justify-between print:hidden">
-          <Button asChild variant="ghost"><Link to="/"><ArrowLeft />Back</Link></Button>
+          <Button variant="ghost" onClick={goBack}>
+            <ArrowLeft />
+            Back
+          </Button>
           <Button onClick={() => window.print()}><Printer />Print / save PDF</Button>
         </div>
         <article className="rounded-lg border border-border bg-card p-8 text-sm">
