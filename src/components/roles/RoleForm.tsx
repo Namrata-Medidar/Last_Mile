@@ -19,56 +19,41 @@ export function RoleForm({
   onCancel,
 }: RoleFormProps) {
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
-  const [slugEdited, setSlugEdited] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setName(role?.name ?? "");
-    setSlug(role?.slug ?? "");
     setDescription(role?.description ?? "");
-    setSlugEdited(Boolean(role));
     setError("");
   }, [role]);
-
-  function handleNameChange(value: string) {
-    setName(value);
-
-    if (!slugEdited) {
-      setSlug(
-        value
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "_")
-          .replace(/^_+|_+$/g, ""),
-      );
-    }
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
     const trimmedName = name.trim();
-    const trimmedSlug = slug.trim().toLowerCase();
 
     if (!trimmedName) {
       setError("Role name is required.");
       return;
     }
 
-    if (!/^[a-z][a-z0-9_]*$/.test(trimmedSlug)) {
-      setError(
-        "Slug must start with a letter and contain only lowercase letters, numbers, and underscores.",
-      );
+    const slug =
+      role?.slug ??
+      trimmedName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    if (!slug) {
+      setError("Enter a role name that includes letters or numbers.");
       return;
     }
 
     try {
       await onSubmit({
         name: trimmedName,
-        slug: trimmedSlug,
+        slug,
         description: description.trim() || null,
       });
     } catch (err) {
@@ -94,7 +79,7 @@ export function RoleForm({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
           <div>
             <label
               htmlFor="role-name"
@@ -105,38 +90,13 @@ export function RoleForm({
             <input
               id="role-name"
               value={name}
-              onChange={(event) => handleNameChange(event.target.value)}
+              onChange={(event) => setName(event.target.value)}
               placeholder="e.g. Support Manager"
               maxLength={80}
               required
               disabled={isSaving || Boolean(role?.is_system)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
             />
-          </div>
-
-          <div>
-            <label
-              htmlFor="role-slug"
-              className="mb-1.5 block text-sm font-medium text-slate-700"
-            >
-              Role slug <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="role-slug"
-              value={slug}
-              onChange={(event) => {
-                setSlugEdited(true);
-                setSlug(event.target.value.toLowerCase());
-              }}
-              placeholder="e.g. support_manager"
-              maxLength={80}
-              required
-              disabled={isSaving || Boolean(role?.is_system)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-            />
-            <p className="mt-1 text-xs text-slate-500">
-              Lowercase letters, numbers and underscores only.
-            </p>
           </div>
         </div>
 

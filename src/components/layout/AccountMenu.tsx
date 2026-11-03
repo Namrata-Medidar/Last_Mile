@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/usePermission";
 import { authService, ROLE_LABELS } from "@/services/authService";
 
 function initials(name: string): string {
@@ -26,7 +27,8 @@ function initials(name: string): string {
 }
 
 export function AccountMenu() {
-  const { ready, userId, profile, email, roles, isStaff } = useAuth();
+  const { ready, userId, profile, email, roles } = useAuth();
+  const permissions = usePermissions();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -85,7 +87,7 @@ export function AccountMenu() {
             Profile & security
           </Link>
         </DropdownMenuItem>
-        {isStaff && (
+        {permissions.can("sidebar.admin.view") && (
           <DropdownMenuItem asChild>
             <Link to="/admin">
               <LayoutDashboard />

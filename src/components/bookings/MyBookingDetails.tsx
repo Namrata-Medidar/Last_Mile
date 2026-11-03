@@ -9,6 +9,7 @@ import {
   MapPin,
   Paperclip,
   Phone,
+  ReceiptText,
   UserRound,
   Users,
 } from "lucide-react";
@@ -294,19 +295,53 @@ export function MyBookingDetails({
           ))}
         </div>
       </div>
-      <div className="flex flex-wrap gap-2 border-b border-border px-4 py-3">
-        {[
-          ["Status", ticket.status],
-          ["Assigned to", ticket.engineer || "Unassigned"],
-        ].map(([label, value]) => (
-          <div
-            key={label}
-            className="w-fit min-w-[120px] max-w-[220px] rounded-md bg-surface/50 px-3 py-2"
-          >
-            <p className="text-[9px] uppercase text-muted-foreground">{label}</p>
-            <p className="mt-1 truncate text-[11px] font-semibold">{value}</p>
+      <div className="flex flex-wrap items-stretch gap-2 border-b border-border px-4 py-3">
+        <div className="flex flex-wrap items-stretch gap-2">
+          {[
+            ["Status", ticket.status],
+            ["Assigned to", ticket.engineer || "Unassigned"],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="flex min-h-9 w-fit min-w-[120px] max-w-[220px] flex-col justify-center rounded-md bg-surface/50 px-3 py-1.5"
+            >
+              <p className="text-[9px] uppercase text-muted-foreground">{label}</p>
+              <p className="truncate text-[11px] font-semibold">{value}</p>
+            </div>
+          ))}
+        </div>
+        {(ticket.dbId || (canCloseTicket && ticket.status !== "Closed")) && (
+          <div className="ml-auto flex items-stretch gap-2">
+            {ticket.dbId && (
+              <Button
+                asChild
+                size="sm"
+                className="h-9 gap-2 rounded-md px-3 text-xs shadow-sm"
+              >
+                <Link to="/invoice/$id" params={{ id: ticket.dbId }}>
+                  <ReceiptText className="h-4 w-4" />
+                  Invoice
+                </Link>
+              </Button>
+            )}
+            {canCloseTicket && ticket.status !== "Closed" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 gap-2 rounded-md px-3 text-xs"
+                onClick={async () => {
+                  const saved = await updateTicket({ status: "Closed", progress: 100 }, "close");
+                  if (saved) {
+                    onNotify?.({ title: "Ticket closed", detail: `${ticket.id} · Completed` });
+                  }
+                }}
+              >
+                <CheckCircle2 />
+                Close ticket
+              </Button>
+            )}
           </div>
-        ))}
+        )}
       </div>
       {cancellationMessages.length > 0 && (
         <div className="space-y-2 border-b border-border p-4">
@@ -363,17 +398,6 @@ export function MyBookingDetails({
           </div>
         </div>
       </div>
-      {ticket.dbId && (
-        <div className="flex justify-end border-b border-border px-4 py-2">
-          <Link
-            to="/invoice/$id"
-            params={{ id: ticket.dbId }}
-            className="text-xs font-semibold text-primary hover:underline"
-          >
-            View invoice &amp; payments
-          </Link>
-        </div>
-      )}
       {!isTeam && ticket.status === "Closed" && ticket.dbId && (
         <RateJob dbId={ticket.dbId} rated={ticket.rating} />
       )}
@@ -458,38 +482,9 @@ export function MyBookingDetails({
             <p className="text-xs font-semibold">{ticket.engineer}</p>
             <p className="mt-1 text-[10px] text-muted-foreground">{ticket.assigneePhone}</p>
           </div>
-          <Button asChild size="sm" variant="outline">
-            <a href={`tel:${ticket.assigneePhone}`}>
-              <Phone />
-              Contact engineer
-            </a>
-          </Button>
         </div>
       )}
-      {isTeam && (canEditTickets || canAddAssignee || canCloseTicket) && (
-        <div className="flex flex-wrap gap-2 border-b border-border p-3">
-          {canEditTickets && (
-            <Button size="sm" variant="outline" onClick={recordCall}>
-              <Phone />
-              Record customer call
-            </Button>
-          )}
-          {canCloseTicket && ticket.status !== "Closed" && (
-            <Button
-              size="sm"
-              onClick={async () => {
-                const saved = await updateTicket({ status: "Closed", progress: 100 }, "close");
-                if (saved) {
-                  onNotify?.({ title: "Ticket closed", detail: `${ticket.id} · Completed` });
-                }
-              }}
-            >
-              <CheckCircle2 />
-              Close ticket
-            </Button>
-          )}
-        </div>
-      )}
+  
       {(activeTab === "public" || (isTeam && activeTab === "internal")) && (
         <Conversation
           channel={activeTab}

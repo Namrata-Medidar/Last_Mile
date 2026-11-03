@@ -123,7 +123,13 @@ export function MyBookingsQueue({
           />
         </div>
       </div>
-      <div className="shrink-0">
+      <div
+        className={
+          isTeam
+            ? "shrink-0"
+            : "queue-scrollbar h-[min(55vh,600px)] min-h-[240px] flex-1 overflow-y-auto overscroll-contain lg:h-auto lg:min-h-0"
+        }
+      >
         {visibleTickets.map((ticket) => {
           const ticketUnreadComments =
             ticket.unreadComments && !readTicketIds.includes(ticket.id) ? ticket.unreadComments : 0;
