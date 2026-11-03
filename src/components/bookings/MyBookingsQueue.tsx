@@ -28,7 +28,7 @@ export function MyBookingsQueue({
   readTicketIds: string[];
   counts: Record<string, number>;
   priorityCounts: Record<string, number>;
-  customerOptions: string[];
+  customerOptions: { id: string; label: string }[];
   statusFilter: string;
   setStatusFilter: (filter: string) => void;
   customerFilter: string;
@@ -97,7 +97,9 @@ export function MyBookingsQueue({
               className="mb-3 h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
             >
               {customerOptions.map((customer) => (
-                <option key={customer}>{customer}</option>
+                <option key={customer.id} value={customer.id}>
+                  {customer.label}
+                </option>
               ))}
             </select>
             <p className="mb-2 text-[9px] font-semibold uppercase text-muted-foreground">
