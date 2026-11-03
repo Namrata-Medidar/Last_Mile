@@ -53,7 +53,7 @@ function AuthPage() {
   const { userId } = useAuth();
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const target = safeRedirect(search.redirect ? new URL(search.redirect, "http://x").pathname : "/");
+  const target = safeRedirect(search.redirect);
 
   useEffect(() => {
     if (userId) navigate({ to: target, replace: true });

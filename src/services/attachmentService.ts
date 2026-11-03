@@ -2,6 +2,19 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
 const BUCKET = "booking-attachments";
+export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "text/plain",
+  "text/csv",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
 
 export type BookingAttachment = Tables<"booking_attachments">;
 
@@ -17,6 +30,15 @@ export const attachmentService = {
   },
 
   async upload(bookingId: string, file: File): Promise<BookingAttachment> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingId)) {
+      throw new Error("A valid booking is required for the attachment.");
+    }
+    if (file.size === 0 || file.size > MAX_ATTACHMENT_SIZE) {
+      throw new Error("Attachments must be non-empty and no larger than 10 MB.");
+    }
+    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
+      throw new Error("Unsupported attachment type. Use PDF, JPEG, PNG, WebP, text, CSV, Word, or Excel files.");
+    }
     const safeName = file.name.replace(/[^\w.-]+/g, "_").slice(-180) || "attachment";
     const storagePath = `${bookingId}/${crypto.randomUUID()}-${safeName}`;
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, file, {

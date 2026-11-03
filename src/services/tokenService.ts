@@ -11,7 +11,5 @@ export async function generate_token() {
     throw new Error("User is not authenticated");
   }
 
-  localStorage.setItem("access_token", token);
-
   return token;
 }
