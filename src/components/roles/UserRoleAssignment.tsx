@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Users, ShieldCheck, UserRoundX, UserPlus, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { HardHat, Search, Users, ShieldCheck, UserRoundX, UserPlus, X } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermission";
+import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { rolePermissionService, type AppRole } from "@/services/rolePermissionService";
+import { BulkUserUpload } from "@/components/roles/BulkUserUpload";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -17,14 +20,13 @@ import {
 type UserProfile = {
   id: string;
   full_name: string | null;
-  is_active?: boolean;
   email: string | null;
+  status: string;
 };
 
 type UserAssignment = {
   id: string;
   user_id: string;
-  role_id: string;
   role: string;
   status: string;
   created_at: string;
@@ -34,14 +36,16 @@ type FilterRole = "All Users" | string;
 type RoleDialogAction = "assign" | "revoke" | null;
 
 function assignmentMatchesRole(assignment: UserAssignment, role: AppRole): boolean {
-  return assignment.role_id === role.id || assignment.role === role.slug;
+  return assignment.role === role.slug;
 }
 
 export function UserRoleAssignment() {
   const queryClient = useQueryClient();
   const permissions = usePermissions();
+  const auth = useAuth();
   const canAssignRoles = permissions.can("users.assign_role");
   const canRevokeRoles = permissions.can("users.revoke_role");
+  const canApproveUsers = auth.hasRole("super_admin");
   const [selectedRole, setSelectedRole] = useState<FilterRole>("All Users");
   const [search, setSearch] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -69,12 +73,36 @@ export function UserRoleAssignment() {
     queryKey: ["user-profiles"],
     enabled: permissions.can("users.tab_view"),
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("id, full_name, email");
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, status");
 
       if (error) throw error;
 
       return (data ?? []) as UserProfile[];
     },
+  });
+
+  const approvalMutation = useMutation({
+    mutationFn: async ({ userId, status }: { userId: string; status: "active" | "rejected" }) => {
+      if (!canApproveUsers) {
+        throw new Error("Only a super admin can approve or reject accounts.");
+      }
+      const { error } = await supabase.rpc("set_user_account_approval", {
+        _user_id: userId,
+        _status: status,
+      });
+      if (error) throw error;
+    },
+    onSuccess: async (_result, variables) => {
+      setNotice(variables.status === "active" ? "User approved." : "User rejected.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["user-profiles"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-role-assignments"] }),
+        queryClient.invalidateQueries({ queryKey: ["users-table"] }),
+      ]);
+    },
+    onError: (error: Error) => setNotice(error.message),
   });
 
   const {
@@ -87,7 +115,7 @@ export function UserRoleAssignment() {
     queryFn: async (): Promise<UserAssignment[]> => {
       const { data, error } = await supabase
         .from("user_roles")
-        .select("id, user_id, role_id, role, status, created_at");
+        .select("id, user_id, role, status, created_at");
 
       if (error) throw error;
       return (data ?? []) as UserAssignment[];
@@ -170,6 +198,8 @@ export function UserRoleAssignment() {
       await queryClient.invalidateQueries({
         queryKey: ["user-role-assignments"],
       });
+      await queryClient.invalidateQueries({ queryKey: ["engineers"] });
+      await queryClient.invalidateQueries({ queryKey: ["user-profiles"] });
     },
     onError: (error: Error) => {
       setNotice(error.message);
@@ -208,6 +238,7 @@ export function UserRoleAssignment() {
       await queryClient.invalidateQueries({
         queryKey: ["user-role-assignments"],
       });
+      await queryClient.invalidateQueries({ queryKey: ["engineers"] });
     },
     onError: (error: Error) => {
       setNotice(error.message);
@@ -216,9 +247,12 @@ export function UserRoleAssignment() {
   });
 
   const isLoading = permissions.isLoading || rolesLoading || usersLoading || assignmentsLoading;
-  const visibleUserIds = filteredUsers.map((user) => user.id);
+  const visibleAssignableUserIds = filteredUsers
+    .filter((user) => user.status === "active")
+    .map((user) => user.id);
   const allVisibleUsersSelected =
-    visibleUserIds.length > 0 && visibleUserIds.every((id) => selectedUserIds.includes(id));
+    visibleAssignableUserIds.length > 0 &&
+    visibleAssignableUserIds.every((id) => selectedUserIds.includes(id));
 
   const toggleUserSelection = (userId: string) => {
     setSelectedUserIds((current) =>
@@ -318,6 +352,18 @@ export function UserRoleAssignment() {
           <h2 className="text-2xl font-semibold text-gray-900">User Role Assignments</h2>
           <p className="mt-1 text-sm text-gray-500">View users and manage their assigned roles.</p>
         </div>
+        {canAssignRoles && (
+          <BulkUserUpload
+            roles={activeRoles}
+            onComplete={async () => {
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["user-profiles"] }),
+                queryClient.invalidateQueries({ queryKey: ["user-role-assignments"] }),
+                queryClient.invalidateQueries({ queryKey: ["engineers"] }),
+              ]);
+            }}
+          />
+        )}
       </div>
 
       {notice && (
@@ -470,12 +516,16 @@ export function UserRoleAssignment() {
                           type="checkbox"
                           aria-label="Select all filtered users"
                           checked={allVisibleUsersSelected}
-                          disabled={assignMutation.isPending || revokeMutation.isPending}
+                          disabled={
+                            assignMutation.isPending ||
+                            revokeMutation.isPending ||
+                            approvalMutation.isPending
+                          }
                           onChange={() =>
                             setSelectedUserIds((current) =>
                               allVisibleUsersSelected
-                                ? current.filter((id) => !visibleUserIds.includes(id))
-                                : [...new Set([...current, ...visibleUserIds])],
+                                ? current.filter((id) => !visibleAssignableUserIds.includes(id))
+                                : [...new Set([...current, ...visibleAssignableUserIds])],
                             )
                           }
                         />
@@ -500,7 +550,12 @@ export function UserRoleAssignment() {
                               aria-label={`Select ${user.full_name || user.email || "user"}`}
                               checked={selectedUserIds.includes(user.id)}
                               onChange={() => toggleUserSelection(user.id)}
-                              disabled={assignMutation.isPending || revokeMutation.isPending}
+                              disabled={
+                                user.status !== "active" ||
+                                assignMutation.isPending ||
+                                revokeMutation.isPending ||
+                                approvalMutation.isPending
+                              }
                             />
                           )}
                         </td>
@@ -524,18 +579,66 @@ export function UserRoleAssignment() {
                         <td className="px-5 py-4">
                           <span
                             className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                              user.is_active === false
-                                ? "bg-gray-100 text-gray-600"
-                                : "bg-green-50 text-green-700"
+                              user.status === "active"
+                                ? "bg-green-50 text-green-700"
+                                : user.status === "pending"
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-gray-100 text-gray-600"
                             }`}
                           >
-                            {user.is_active === false ? "Inactive" : "Active"}
+                            {user.status}
                           </span>
                         </td>
 
                         <td className="px-5 py-4">
                           <div className="flex justify-end gap-2">
-                            {canAssignRoles && (
+                            {auth.hasRole("super_admin") &&
+                              assignedRoles.some((role) => role.slug === "engineer") && (
+                                <Link
+                                  to="/admin"
+                                  search={{ tab: "engineers" }}
+                                  aria-label={`Open Engineers & dispatch for ${user.full_name || user.email || "engineer"}`}
+                                  title="Open Engineers & dispatch"
+                                  className="inline-flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                                >
+                                  <HardHat size={14} />
+                                  Engineers &amp; dispatch
+                                </Link>
+                              )}
+                            {canApproveUsers &&
+                              (user.status === "pending" || user.status === "rejected") && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={approvalMutation.isPending}
+                                    onClick={() =>
+                                      approvalMutation.mutate({
+                                        userId: user.id,
+                                        status: "active",
+                                      })
+                                    }
+                                    className="rounded-lg border border-green-300 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                                  >
+                                    Approve
+                                  </button>
+                                  {user.status === "pending" && (
+                                    <button
+                                      type="button"
+                                      disabled={approvalMutation.isPending}
+                                      onClick={() =>
+                                        approvalMutation.mutate({
+                                          userId: user.id,
+                                          status: "rejected",
+                                        })
+                                      }
+                                      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                    >
+                                      Reject
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            {canAssignRoles && user.status === "active" && (
                               <button
                                 type="button"
                                 disabled={assignMutation.isPending || revokeMutation.isPending}

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CircleHelp } from "lucide-react";
 import { panel, label, money } from "@/components/common/ui";
 import { Button } from "@/components/ui/button";
@@ -11,14 +12,22 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useAuth } from "@/hooks/use-auth";
 import { computeQuote, PRIORITIES } from "@/lib/pricing";
+import { customerSitesQuery } from "@/services/customerDetailsService";
+import { userService } from "@/services/userService";
 import { PricingRulebook } from "./PricingRulebook";
+import {
+  cancellationWindowDescription,
+  type CancellationPolicy,
+} from "@/services/cancellationPolicyService";
 
 type EngineerLevel = "L1" | "L2" | "L1 + L2";
 type PriorityCode = keyof typeof PRIORITIES;
 type BookingHours = 4 | 8;
 type PointOfContact = { name: string; mobile: string };
 type SiteDetails = {
+  id?: string;
   code: string;
   name: string;
   address: string;
@@ -27,6 +36,10 @@ const emptyPointOfContact = (): PointOfContact => ({ name: "", mobile: "" });
 
 type BookingFormProps = {
   onBack: () => void;
+  cancellationPolicy: CancellationPolicy | null;
+  cancellationPolicyLoading: boolean;
+  cancellationPolicyError: string | null;
+  onRetryCancellationPolicy: () => void;
   onSubmit: (booking: {
     customerType: "existing" | "new";
     level: EngineerLevel;
@@ -48,9 +61,28 @@ type BookingFormProps = {
   }) => void | Promise<void>;
 };
 
-export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
+export function BookingForm({
+  onBack,
+  onSubmit,
+  cancellationPolicy,
+  cancellationPolicyLoading,
+  cancellationPolicyError,
+  onRetryCancellationPolicy,
+}: BookingFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [customerType, setCustomerType] = useState<"existing" | "new">("existing");
+  const { userId } = useAuth();
+  const profileQuery = useQuery({
+    queryKey: ["profile", userId],
+    enabled: customerType === "existing" && Boolean(userId),
+    queryFn: () => userService.getProfile(userId!),
+  });
+  const company = profileQuery.data?.company?.trim() ?? "";
+  const customerSites = useQuery({
+    ...customerSitesQuery(company),
+    enabled: customerType === "existing" && Boolean(company),
+  });
+  const [selectedSiteId, setSelectedSiteId] = useState("");
   const [level, setLevel] = useState<EngineerLevel | "">("");
   const [count, setCount] = useState(1);
   const [priority, setPriority] = useState<PriorityCode | "">("");
@@ -64,6 +96,12 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
   const [pocs, setPocs] = useState<PointOfContact[]>([emptyPointOfContact()]);
   const [issueDescription, setIssueDescription] = useState("");
   const [workInstructions, setWorkInstructions] = useState("");
+  useEffect(() => {
+    if (customerType !== "existing") return;
+    setSelectedSiteId("");
+    setSite({ code: "", name: "", address: "" });
+    setPocs([emptyPointOfContact()]);
+  }, [company, customerType]);
   const urgent = priority === "P0";
   const chooseLevel = (nextLevel: EngineerLevel | "") => {
     setLevel(nextLevel);
@@ -78,6 +116,7 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
     setSite((currentSite) => ({ ...currentSite, [key]: value }));
   };
   const resetBookingFields = () => {
+    setSelectedSiteId("");
     setLevel("");
     setCount(1);
     setPriority("");
@@ -100,7 +139,28 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
       ? Math.floor((Date.parse(endDate) - Date.parse(startDate)) / 86_400_000) + 1
       : 0;
   const validDates = dayCount > 0;
-  const validSite = Object.values(site).every((value) => value.trim().length > 0);
+  const validSite =
+    site.code.trim().length > 0 &&
+    site.name.trim().length > 0 &&
+    site.address.trim().length > 0 &&
+    (customerType === "new" || Boolean(site.id));
+  const selectSite = (siteId: string) => {
+    setSelectedSiteId(siteId);
+    const selectedSite = customerSites.data?.find((candidate) => candidate.id === siteId);
+    if (!selectedSite) {
+      setSite({ code: "", name: "", address: "" });
+      setPocs([emptyPointOfContact()]);
+      return;
+    }
+
+    setSite({
+      id: selectedSite.id,
+      code: selectedSite.store_code,
+      name: selectedSite.store_name ?? "",
+      address: selectedSite.address ?? "",
+    });
+    setPocs([{ name: selectedSite.poc ?? "", mobile: selectedSite.poc_no ?? "" }]);
+  };
   const startHour = Number(startTime.split(":")[0]);
   const quote =
     level && priority && hours
@@ -120,7 +180,7 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
   const totalPayable = quote ? Math.max(0, Math.round(quote.total)) : null;
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-5 pb-6"> 
+    <div className="mx-auto max-w-[1100px] space-y-5 pb-6">
       <div className="flex items-end justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase text-primary">Field engineer support</p>
@@ -229,30 +289,79 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
           </SheetContent>
         </Sheet>
         <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          <label>
-            <span className={label}>Site code *</span>
-            <Input
-              value={site.code}
-              onChange={(event) => updateSite("code", event.target.value)}
-              placeholder="Enter site code"
-              required
-            />
-          </label>
-          <label>
-            <span className={label}>Site name *</span>
-            <Input
-              value={site.name}
-              onChange={(event) => updateSite("name", event.target.value)}
-              placeholder="Enter site name"
-              required
-            />
-          </label>
+          {customerType === "existing" && (
+            <label className="sm:col-span-2">
+              <span className={label}>Site *</span>
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={selectedSiteId}
+                onChange={(event) => selectSite(event.target.value)}
+                required
+              >
+                <option value="">
+                  {!userId
+                    ? "Sign in to view customer sites"
+                    : profileQuery.isPending
+                      ? "Loading your profile…"
+                      : profileQuery.isError
+                        ? "Could not load your profile"
+                        : !company
+                          ? "No company is set on your profile"
+                          : customerSites.isPending
+                            ? "Loading sites…"
+                            : customerSites.isError
+                              ? "Could not load sites"
+                              : customerSites.data?.length
+                                ? "Select a site"
+                                : "No sites available"}
+                </option>
+                {customerSites.data?.map((customerSite) => (
+                  <option key={customerSite.id} value={customerSite.id}>
+                    {customerSite.store_code} - {customerSite.store_name ?? ""}
+                  </option>
+                ))}
+              </select>
+              {profileQuery.isError && (
+                <span role="alert" className="mt-1 block text-xs text-destructive">
+                  Could not load your profile: {profileQuery.error.message}
+                </span>
+              )}
+              {customerSites.isError && (
+                <span role="alert" className="mt-1 block text-xs text-destructive">
+                  Could not load customer sites: {customerSites.error.message}
+                </span>
+              )}
+            </label>
+          )}
+          {customerType === "new" && (
+            <>
+              <label>
+                <span className={label}>Site code *</span>
+                <Input
+                  value={site.code}
+                  onChange={(event) => updateSite("code", event.target.value)}
+                  placeholder="Enter site code"
+                  required
+                />
+              </label>
+              <label>
+                <span className={label}>Site name *</span>
+                <Input
+                  value={site.name}
+                  onChange={(event) => updateSite("name", event.target.value)}
+                  placeholder="Enter site name"
+                  required
+                />
+              </label>
+            </>
+          )}
           <label>
             <span className={label}>Site address *</span>
             <Input
               value={site.address}
               onChange={(event) => updateSite("address", event.target.value)}
               placeholder="Enter site address"
+              readOnly={customerType === "existing"}
               required
             />
           </label>
@@ -271,13 +380,15 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
         <section className={panel}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Site contacts</h2>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setPocs((currentPocs) => [...currentPocs, { name: "", mobile: "" }])}
-            >
-              Add POC
-            </Button>
+            {customerType === "new" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPocs((currentPocs) => [...currentPocs, { name: "", mobile: "" }])}
+              >
+                Add POC
+              </Button>
+            )}
           </div>
           <div className="mt-4 space-y-3">
             {pocs.map((poc, index) => (
@@ -287,6 +398,7 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
                   <Input
                     value={poc.name}
                     onChange={(event) => updatePoc(index, "name", event.target.value)}
+                    readOnly={customerType === "existing"}
                   />
                 </label>
                 <label>
@@ -294,6 +406,7 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
                   <Input
                     value={poc.mobile}
                     onChange={(event) => updatePoc(index, "mobile", event.target.value)}
+                    readOnly={customerType === "existing"}
                   />
                 </label>
               </div>
@@ -400,6 +513,30 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
 
       {level && <PricingRulebook level={level} />}
 
+      <section className={`${panel} space-y-1`}>
+        <h2 className="text-sm font-semibold">Cancellation terms</h2>
+        {cancellationPolicyLoading ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            Loading your cancellation terms…
+          </p>
+        ) : cancellationPolicyError ? (
+          <p role="alert" className="text-xs text-destructive">
+            Cancellation terms could not be loaded: {cancellationPolicyError}{" "}
+            <button type="button" className="underline" onClick={onRetryCancellationPolicy}>
+              Retry
+            </button>
+          </p>
+        ) : cancellationPolicy ? (
+          <p className="text-xs text-muted-foreground">
+            Cancellation fee:{" "}
+            <span className="font-semibold text-foreground">{money(cancellationPolicy.fee)}</span>{" "}
+            applies {cancellationWindowDescription(cancellationPolicy)}.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Sign in to view your cancellation terms.</p>
+        )}
+      </section>
+
       <section className={`${panel} sticky bottom-4 z-10 shadow-lg`}>
         <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1 text-xs">
@@ -419,11 +556,15 @@ export function BookingForm({ onBack, onSubmit }: BookingFormProps) {
           <div className="flex items-center gap-4 border-t border-border pt-3 sm:border-t-0 sm:border-l sm:pl-4 sm:pt-0">
             <div>
               <p className="text-[10px] text-muted-foreground">Total payable</p>
-              <p className="text-lg font-semibold text-primary">{totalPayable === null ? "—" : money(totalPayable)}</p>
+              <p className="text-lg font-semibold text-primary">
+                {totalPayable === null ? "—" : money(totalPayable)}
+              </p>
             </div>
             <Button
               disabled={
                 submitting ||
+                cancellationPolicyLoading ||
+                Boolean(cancellationPolicyError) ||
                 !validDates ||
                 !validSite ||
                 !issueDescription.trim() ||

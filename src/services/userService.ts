@@ -8,6 +8,7 @@ export type Profile = {
   phone: string | null;
   company: string | null;
   address: string | null;
+  status: string;
 };
 
 export type ProfileUpdate = Pick<Profile, "full_name" | "phone" | "company" | "address">;
@@ -16,7 +17,7 @@ export const userService = {
   async getProfile(userId: string): Promise<Profile | null> {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, email, phone, company, address")
+      .select("id, full_name, email, phone, company, address, status")
       .eq("id", userId)
       .maybeSingle();
     if (error) throw error;

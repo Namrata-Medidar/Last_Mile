@@ -163,5 +163,15 @@ signUp: async (input: {
       current_password: currentPassword,
     } as never),
 
-  signOut: () => supabase.auth.signOut(),
+  // signOut: (scope: "global" | "local" = "local") =>
+  //   supabase.auth.signOut({ scope }),
+  signOut: async (scope: "global" | "local" = "local") => {
+  const result = await supabase.auth.signOut({ scope });
+
+  if (!result.error) {
+    localStorage.removeItem("access_token");
+  }
+
+  return result;
+},
 };

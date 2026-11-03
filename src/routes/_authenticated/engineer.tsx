@@ -11,7 +11,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
-import { computeEarnings, engineerService, myEngineerQuery, myJobsQuery, payoutShareQuery, useEngineerRealtime, type Engineer, type Job } from "@/services/engineerService";
+import {
+  computeEarnings,
+  engineerCancellationMessagesQuery,
+  engineerService,
+  myEngineerQuery,
+  myJobsQuery,
+  payoutShareQuery,
+  useEngineerRealtime,
+  type Engineer,
+  type Job,
+} from "@/services/engineerService";
 
 export const Route = createFileRoute("/_authenticated/engineer")({
   head: () => ({
@@ -105,6 +115,7 @@ function Stat({ icon: Icon, label, value }: { icon: typeof Star; label: string; 
 function Dashboard({ engineer }: { engineer: Engineer }) {
   const qc = useQueryClient();
   const jobs = useQuery(myJobsQuery(engineer.id));
+  const cancellationMessages = useQuery(engineerCancellationMessagesQuery(engineer.id));
   const share = useQuery(payoutShareQuery).data ?? 0.6;
   const [tab, setTab] = useState<"active" | "history">("active");
   const list = jobs.data ?? [];
@@ -146,20 +157,45 @@ function Dashboard({ engineer }: { engineer: Engineer }) {
         <Button size="sm" variant={tab === "active" ? "default" : "outline"} onClick={() => setTab("active")}>Active trips ({active.length})</Button>
         <Button size="sm" variant={tab === "history" ? "default" : "outline"} onClick={() => setTab("history")}>Trip history ({history.length})</Button>
       </div>
+      {cancellationMessages.error && (
+        <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          Cancellation messages could not be loaded: {cancellationMessages.error.message}
+        </p>
+      )}
       {jobs.isLoading ? (
         <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="h-24 animate-pulse rounded-lg bg-surface" />)}</div>
       ) : (tab === "active" ? active : history).length === 0 ? (
         <div className="rounded-lg border border-border bg-card p-10 text-center text-sm text-muted-foreground">{tab === "active" ? "No active jobs. New assignments appear here instantly." : "No completed jobs yet."}</div>
       ) : (
         <div className="space-y-3">
-          {(tab === "active" ? active : history).map((j) => <JobCard key={j.id} job={j} busy={action.isPending} onAction={(a) => action.mutate({ id: j.id, action: a })} />)}
+          {(tab === "active" ? active : history).map((j) => (
+            <JobCard
+              key={j.id}
+              job={j}
+              busy={action.isPending}
+              cancellationMessages={(cancellationMessages.data ?? []).filter(
+                (message) => message.booking_id === j.id,
+              )}
+              onAction={(a) => action.mutate({ id: j.id, action: a })}
+            />
+          ))}
         </div>
       )}
     </>
   );
 }
 
-function JobCard({ job, busy, onAction }: { job: Job; busy: boolean; onAction: (a: "start" | "complete") => void }) {
+function JobCard({
+  job,
+  busy,
+  cancellationMessages,
+  onAction,
+}: {
+  job: Job;
+  busy: boolean;
+  cancellationMessages: { body: string; created_at: string }[];
+  onAction: (a: "start" | "complete") => void;
+}) {
   const place = [job.site_address, job.city].filter(Boolean).join(", ");
   return (
     <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card p-4">
@@ -168,6 +204,17 @@ function JobCard({ job, busy, onAction }: { job: Job; busy: boolean; onAction: (
         <p className="mt-1 font-semibold">{job.title}</p>
         <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{place || "Site address shared by operations"}{job.customer_name ? ` · ${job.customer_name}` : ""}</p>
         {job.customer_rating && <p className="mt-1 flex items-center gap-1 text-xs"><Star className="h-3.5 w-3.5 text-warning" />{job.customer_rating}/5 from customer</p>}
+        {cancellationMessages.map((message) => (
+          <div
+            key={`${message.created_at}-${message.body}`}
+            className="mt-3 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm"
+          >
+            <p className="font-semibold text-warning">Customer cancellation message</p>
+            <p className="mt-1 whitespace-pre-wrap text-foreground">
+              {message.body.replace(/^Cancellation message:\s*/, "")}
+            </p>
+          </div>
+        ))}
       </div>
       <span className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs"><Clock3 className="h-3 w-3" />{job.status}</span>
       {place && (
