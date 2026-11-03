@@ -72,7 +72,7 @@ function createSupabaseClient() {
     // },
       auth: {
       persistSession: false,
-      autoRefreshToken: true,
+      autoRefreshToken: false,
       detectSessionInUrl: true,
     },
       });

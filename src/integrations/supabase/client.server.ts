@@ -50,7 +50,7 @@ function createSupabaseAdminClient() {
     auth: {
       storage: undefined,
       persistSession: false,
-      autoRefreshToken: true,
+      autoRefreshToken: false,
     }
   });
 }
