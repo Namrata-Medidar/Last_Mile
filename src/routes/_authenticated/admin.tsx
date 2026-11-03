@@ -6,13 +6,11 @@ import { ArrowLeft } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/usePermission";
 import { BillingPanel } from "@/components/admin/BillingPanel";
 import { EngineerDispatchPanel } from "@/components/admin/EngineerDispatchPanel";
-import { ROLE_LABELS, type AppRole } from "@/services/authService";
 import {
   cancellationPolicyService,
   customerCancellationPoliciesQuery,
@@ -42,12 +40,12 @@ export const Route = createFileRoute("/_authenticated/admin")({
       {
         name: "description",
         content:
-          "Dashboard, users, price settings, change history and analytics for Last Mile Connect.",
+          "Dashboard, payments, price settings, change history and analytics for Last Mile Connect.",
       },
       { property: "og:title", content: "Admin & operations — Last Mile Connect" },
       {
         property: "og:description",
-        content: "Run the field engineer marketplace: numbers, users, pricing and history.",
+        content: "Run the field engineer marketplace: operations, pricing and history.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -56,7 +54,6 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
 });
 
-const ALL_ROLES: AppRole[] = ["super_admin", "admin", "ops_manager", "engineer", "customer"];
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
 function AdminPage() {
@@ -113,9 +110,7 @@ function AdminPage() {
               ? "engineers"
               : permissions.can("tickets.view")
                 ? "dashboard"
-                : permissions.can("users.view")
-                  ? "users"
-                  : "billing"
+                : "billing"
           }
         >
           <TabsList>
@@ -123,7 +118,6 @@ function AdminPage() {
               <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             )}
             <TabsTrigger value="billing">Payments</TabsTrigger>
-            {permissions.can("users.view") && <TabsTrigger value="users">Users</TabsTrigger>}
             {isAdmin && <TabsTrigger value="pricing">Prices</TabsTrigger>}
             {isAdmin && <TabsTrigger value="audit">Change history</TabsTrigger>}
             {isStaff && <TabsTrigger value="engineers">Engineers &amp; dispatch</TabsTrigger>}
@@ -136,14 +130,6 @@ function AdminPage() {
           <TabsContent value="billing">
             <BillingPanel />
           </TabsContent>
-          {permissions.can("users.view") && (
-            <TabsContent value="users">
-              <Users
-                canManageUsers={permissions.can("users.manage") && isAdmin}
-                isSuperAdmin={isSuperAdmin}
-              />
-            </TabsContent>
-          )}
           {isAdmin && (
             <TabsContent value="pricing">
               <Pricing isSuperAdmin={isSuperAdmin} />
@@ -217,141 +203,6 @@ function Dashboard({ enabled }: { enabled: boolean }) {
         <ChartCard title="Orders by service" data={countBy(rows, (r) => r.service_slug)} />
         <ChartCard title="Orders by priority" data={countBy(rows, (r) => r.priority)} />
         <ChartCard title="Orders by status" data={countBy(rows, (r) => r.status)} />
-      </div>
-    </div>
-  );
-}
-
-function Users({
-  canManageUsers,
-  isSuperAdmin,
-}: {
-  canManageUsers: boolean;
-  isSuperAdmin: boolean;
-}) {
-  const qc = useQueryClient();
-  const { userId, roles: myRoles } = useAuth();
-  const q = useQuery(usersQuery());
-  const [search, setSearch] = useState("");
-  const m = useMutation({
-    mutationFn: (a: { id: string; role: AppRole; grant: boolean }) => {
-      if (!canManageUsers) throw new Error("You do not have permission to manage user access.");
-      return adminService.setRole(a.id, a.role, a.grant);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin"] });
-      toast.success("Access updated");
-    },
-    onError: (e: Error) => toast.error(e.message || "Update failed"),
-  });
-  const approval = useMutation({
-    mutationFn: (a: { id: string; status: "active" | "rejected" }) => {
-      if (!isSuperAdmin) throw new Error("Only a super admin can approve or reject accounts.");
-      return adminService.setUserApproval(a.id, a.status);
-    },
-    onSuccess: async (_result, variables) => {
-      await qc.invalidateQueries({ queryKey: ["users-table"] });
-      toast.success(variables.status === "active" ? "User approved" : "User rejected");
-    },
-    onError: (error: Error) => toast.error(error.message || "Account status update failed"),
-  });
-  const list = (q.data ?? []).filter((u) =>
-    `${u.full_name} ${u.email} ${u.company}`.toLowerCase().includes(search.toLowerCase()),
-  );
-  if (q.isLoading) return <p className="mt-4 text-sm text-muted-foreground">Loading users…</p>;
-  if (q.error)
-    return (
-      <p role="alert" className="mt-4 text-sm text-destructive">
-        Users could not be loaded: {q.error.message}
-      </p>
-    );
-  return (
-    <div className="mt-4 space-y-3">
-      <Input
-        placeholder="Search by name, email or company"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="max-w-sm"
-      />
-      <div className="overflow-x-auto rounded-lg border border-border bg-card">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border text-left text-xs text-muted-foreground">
-            <tr>
-              <th className="p-3">User</th>
-              <th className="p-3">Account status</th>
-              {ALL_ROLES.map((r) => (
-                <th key={r} className="p-3">
-                  {ROLE_LABELS[r]}
-                </th>
-              ))}
-              <th className="p-3">Approval</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {list.map((u) => (
-              <tr key={u.id}>
-                <td className="p-3">
-                  <p className="font-medium">
-                    {u.full_name || "—"}
-                    {u.id === userId && " (you)"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {[u.email, u.company].filter(Boolean).join(" · ")}
-                  </p>
-                </td>
-                <td className="p-3">
-                  <span
-                    className={`rounded px-2 py-1 text-xs capitalize ${u.status === "active" ? "bg-success/10 text-success" : u.status === "rejected" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning"}`}
-                  >
-                    {u.status}
-                  </span>
-                </td>
-                {ALL_ROLES.map((r) => (
-                  <td key={r} className="p-3">
-                    <Checkbox
-                      checked={u.roles.includes(r)}
-                      disabled={
-                        !canManageUsers ||
-                        m.isPending ||
-                        approval.isPending ||
-                        u.status !== "active" ||
-                        (r === "super_admin" && !myRoles.includes("super_admin"))
-                      }
-                      onCheckedChange={(v) => m.mutate({ id: u.id, role: r, grant: v === true })}
-                      aria-label={`${ROLE_LABELS[r]} for ${u.full_name ?? u.email}`}
-                    />
-                  </td>
-                ))}
-                <td className="p-3">
-                  {isSuperAdmin && (u.status === "pending" || u.status === "rejected") ? (
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        disabled={approval.isPending}
-                        onClick={() => approval.mutate({ id: u.id, status: "active" })}
-                      >
-                        Approve
-                      </Button>
-                      {u.status === "pending" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={approval.isPending}
-                          onClick={() => approval.mutate({ id: u.id, status: "rejected" })}
-                        >
-                          Reject
-                        </Button>
-                      )}
-                    </div>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {list.length === 0 && (
-          <p className="p-6 text-center text-sm text-muted-foreground">No users found.</p>
-        )}
       </div>
     </div>
   );

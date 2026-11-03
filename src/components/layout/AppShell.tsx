@@ -44,7 +44,7 @@ showServiceNav &&
     canViewCustomerPortal,
   }),
       role === "team" && /* @__PURE__ */ jsx(ProjectSideNav, { activeSection: projectSection, onCreateTicket: onCreateProjectTicket, canViewDashboard, canViewTickets, canViewRoles, canViewPayment, canCreateTickets }),
-      /* @__PURE__ */ jsx("main", { id: "main-content", className: "min-w-0 flex-1 px-4 py-5 md:px-6 xl:px-8", children })
+      /* @__PURE__ */ jsx("main", { id: "main-content", className: `min-w-0 flex-1 px-4 py-5 md:px-6 xl:px-8 ${projectSection === "tickets" ? "h-[calc(100vh-4rem)] min-h-0 overflow-hidden pb-3 pt-0" : ""}`, children })
     ] })
   ] });
 }

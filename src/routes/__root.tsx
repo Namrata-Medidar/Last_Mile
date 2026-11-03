@@ -7,8 +7,9 @@ import {
   HeadContent,
   Scripts,
   type ErrorComponentProps,
+  useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -18,6 +19,36 @@ import { supabase } from "@/integrations/supabase/client";
 import { THEME_INIT_SCRIPT, initializeTheme, subscribeTheme } from "../lib/themes";
 
 function NotFoundComponent() {
+  const [hydrated, setHydrated] = useState(false);
+  const [showNotFound, setShowNotFound] = useState(false);
+  const isLoading = useRouterState({ select: (state) => state.isLoading });
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || isLoading) {
+      setShowNotFound(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setShowNotFound(true), 750);
+    return () => window.clearTimeout(timeout);
+  }, [hydrated, isLoading]);
+
+  if (!showNotFound) {
+    return (
+      <div
+        className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
+        Loading page…
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
