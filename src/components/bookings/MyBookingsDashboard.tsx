@@ -52,9 +52,7 @@ export function ProjectDashboard({ allTickets }: { allTickets: Ticket[] }) {
       <div className="mb-4">
         <p className="text-[10px] font-bold uppercase text-primary">Operations overview</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Project dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Current ticket counts by status and priority.
-        </p>
+     
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <DashboardMetric

@@ -151,6 +151,11 @@ export function MyBookingDetails({
         ...(ticket.visitTime ? { visitTime: ticket.visitTime } : {}),
       }),
   );
+  const currentEngineerId =
+    ticket.engineerId ??
+    assignableEngineers.find((engineer) => engineer.full_name === ticket.engineer)?.id ??
+    "";
+  const assigneeChanged = selectedEngineerId !== currentEngineerId;
 
   return (
     <section className="min-w-0 overflow-hidden rounded-md border border-border bg-card">
@@ -445,7 +450,7 @@ export function MyBookingDetails({
           <Button
             className="self-end"
             size="sm"
-            disabled={engineersLoading || Boolean(engineersError)}
+            disabled={engineersLoading || Boolean(engineersError) || !assigneeChanged}
             onClick={async () => {
               const engineer = assignableEngineers.find(
                 (candidate) => candidate.id === selectedEngineerId,
@@ -473,7 +478,7 @@ export function MyBookingDetails({
           </Button>
         </div>
       )}
-      {isAssigned && ticket.assigneePhone && (
+      {isAssigned && ticket.assigneePhone && (!isTeam || !canAddAssignee) && (
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
           <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary">
             <UserRound className="h-5 w-5" />

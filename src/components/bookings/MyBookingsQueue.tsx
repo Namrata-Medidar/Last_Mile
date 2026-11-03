@@ -50,9 +50,25 @@ export function MyBookingsQueue({
       <div className="shrink-0 border-b border-border p-3">
         <div>
           <p className="text-sm font-semibold">{isTeam ? "Project queue" : "My orders"}</p>
-          <p className="mt-0.5 text-[10px] text-muted-foreground">
-            {visibleTickets.length} visible {isTeam ? "tickets" : "orders"}
-          </p>
+          {isTeam ? (
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter("All");
+                setCustomerFilter("All");
+                setPriorityFilter("All");
+                setSearch("");
+              }}
+              className="mt-0.5 rounded-sm text-left text-[10px] text-muted-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Show all tickets and clear queue filters"
+            >
+              {visibleTickets.length} visible tickets
+            </button>
+          ) : (
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              {visibleTickets.length} visible orders
+            </p>
+          )}
         </div>
         <div className="mt-3 grid grid-cols-3 gap-1">
           {statuses.map(({ label, style }) => {
