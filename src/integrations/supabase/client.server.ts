@@ -30,6 +30,9 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 }
 
 function createSupabaseAdminClient() {
+  if (typeof window !== 'undefined') {
+    throw new Error('The privileged Supabase client is server-only');
+  }
   const SUPABASE_URL = process.env['SUPABASE_URL'];
   const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
@@ -51,6 +54,7 @@ function createSupabaseAdminClient() {
       storage: undefined,
       persistSession: false,
       autoRefreshToken: false,
+      detectSessionInUrl: false,
     }
   });
 }

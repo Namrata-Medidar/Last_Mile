@@ -29,6 +29,7 @@ import { OrderConfirmationModal } from "@/components/common/OrderConfirmationMod
 import { ProjectSettings } from "@/components/project/ProjectSettings";
 import type { CatalogService } from "@/services/catalogService";
 import { authService } from "@/services/authService";
+import { userService } from "@/services/userService";
 import {
   cancellationPolicyQuery,
   type CancellationPolicy,
@@ -41,8 +42,7 @@ export type AppPage =
   | "project"
   | "project-dashboard"
   | "project-tickets"
-  | "project-roles"
-  | "project-payment";
+  | "project-roles";
 
 type BookingFlow = {
   userId: string;
@@ -96,45 +96,6 @@ function savePendingBookingRequest(request: PendingBookingRequest | null): void 
     console.error("Could not save booking retry data in this browser session.", error);
   }
 }
-
-const sampleTickets = [
-  {
-    title: "Fiber link instability at Kochi branch",
-    priority: "Urgent",
-    city: "Kochi",
-    customer: "Federal Bank",
-    status: "Open",
-    engineer: "Unassigned",
-    progress: 8,
-  },
-  {
-    title: "New store WiFi readiness survey",
-    priority: "Medium",
-    city: "Mysuru",
-    customer: "Croma",
-    status: "Open",
-    engineer: "Unassigned",
-    progress: 12,
-  },
-  {
-    title: "Core switch replacement and testing",
-    priority: "High",
-    city: "Chennai",
-    customer: "TVS Motors",
-    status: "In Progress",
-    engineer: "Neha Singh",
-    progress: 55,
-  },
-  {
-    title: "Structured cabling certification",
-    priority: "Low",
-    city: "Ahmedabad",
-    customer: "Adani Retail",
-    status: "Open",
-    engineer: "Unassigned",
-    progress: 8,
-  },
-];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
@@ -190,7 +151,6 @@ const pageTitles: Record<AppPage, string> = {
   "project-dashboard": "Project dashboard",
   "project-tickets": "Tickets",
   "project-roles": "Role management",
-  "project-payment": "Payment",
 };
 
 export function App({
@@ -251,16 +211,9 @@ export function App({
   );
   const isProjectPage = page.startsWith("project");
   const canEditTickets = !isProjectPage || permissions.can("tickets.edit");
-  const canCreateTickets = isProjectPage && permissions.can("tickets.create");
   const role = isProjectPage ? "team" : "customer";
   const projectSection =
-    page === "project-tickets"
-      ? "tickets"
-      : page === "project-roles"
-        ? "roles"
-        : page === "project-payment"
-          ? "payment"
-          : "dashboard";
+    page === "project-tickets" ? "tickets" : page === "project-roles" ? "roles" : "dashboard";
   const refreshTickets = () => qc.invalidateQueries({ queryKey: ["bookings", userId] });
 
   const goHome = () => navigate({ to: "/" });
@@ -291,24 +244,6 @@ export function App({
       return;
     }
     void navigate({ to: "/" });
-  };
-
-  const createSampleTicket = async () => {
-    if (!permissions.can("tickets.create")) {
-      toast.error("You don’t have permission to create tickets.");
-      return;
-    }
-    if (!userId) return;
-    const sample = sampleTickets[customerTickets.length % sampleTickets.length];
-    if (!sample) throw new Error("No sample ticket is configured.");
-    try {
-      await bookingService.createSample(userId, sample);
-      refreshTickets();
-      toast.success("New ticket created");
-      void navigate({ to: "/$", params: { _splat: "project/ticket" } });
-    } catch {
-      toast.error("Could not create the ticket. Please retry.");
-    }
   };
 
   const createTicket = async (nextBooking: NewBooking) => {
@@ -425,15 +360,12 @@ export function App({
     try {
       await bookingService.comment(ticket.dbId, visibility, text, {
         name: auth.profile?.full_name || auth.email || "User",
-        role: auth.isStaff
-          ? visibility === "internal"
-            ? "Service desk"
-            : "Operations"
-          : "Customer",
+        role: (await userService.getRoleNames(userId!)).join(", "),
       });
       qc.invalidateQueries({ queryKey: ["booking-comments", userId] });
-    } catch {
-      toast.error("Message could not be sent.");
+    } catch (error) {
+      console.error("Could not send ticket message.", error);
+      toast.error(error instanceof Error ? error.message : "Message could not be sent.");
     }
   };
 
@@ -531,54 +463,63 @@ export function App({
 
   if (userId && auth.profile?.status !== "active") {
     const isRejected = auth.profile?.status === "rejected";
+    const isDeleted = auth.profile?.status === "deleted";
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
         <div className="max-w-md space-y-3 rounded-lg border border-border bg-card p-6">
           <h1 className="text-xl font-semibold">
-            {isRejected ? "Account access rejected" : "Account pending approval"}
+            {isDeleted
+              ? "Account deleted"
+              : isRejected
+                ? "Account access rejected"
+                : "Account pending approval"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {isRejected
-              ? "Your account was not approved. Contact the super administrator if you believe this is incorrect."
-              : "A super administrator must approve your account before you can access bookings or account permissions."}
+            {isDeleted
+              ? "This account has been deleted. Contact the super administrator if you believe this is incorrect."
+              : isRejected
+                ? "Your account was not approved. Contact the super administrator if you believe this is incorrect."
+                : "A super administrator must approve your account before you can access bookings or account permissions."}
           </p>
           <div className="flex justify-center gap-4">
-            <button
-              type="button"
-              className="text-sm underline"
-              disabled={isCheckingApproval}
-              onClick={async () => {
-                setIsCheckingApproval(true);
-                try {
-                  await Promise.all([
-                    qc.refetchQueries(
-                      {
-                        queryKey: ["profile", userId],
-                      },
-                      {
-                        throwOnError: true,
-                      },
-                    ),
-                    qc.refetchQueries(
-                      {
-                        queryKey: ["roles", userId],
-                      },
-                      {
-                        throwOnError: true,
-                      },
-                    ),
-                  ]);
-                } catch (error) {
-                  toast.error(
-                    `Could not check approval status: ${error instanceof Error ? error.message : "Unknown error"}`,
-                  );
-                } finally {
-                  setIsCheckingApproval(false);
-                }
-              }}
-            >
-              {isCheckingApproval ? "Checking…" : "Check approval status"}
-            </button>
+            {!isDeleted && (
+              <button
+                type="button"
+                className="text-sm underline"
+                disabled={isCheckingApproval}
+                onClick={async () => {
+                  setIsCheckingApproval(true);
+                  try {
+                    await Promise.all([
+                      qc.refetchQueries(
+                        {
+                          queryKey: ["profile", userId],
+                        },
+                        {
+                          throwOnError: true,
+                        },
+                      ),
+                      qc.refetchQueries(
+                        {
+                          queryKey: ["roles", userId],
+                        },
+                        {
+                          throwOnError: true,
+                        },
+                      ),
+                    ]);
+                  } catch (error) {
+                    toast.error(
+                      `Could not check approval status: ${error instanceof Error ? error.message : "Unknown error"}`,
+                    );
+                  } finally {
+                    setIsCheckingApproval(false);
+                  }
+                }}
+              >
+                {isCheckingApproval ? "Checking…" : "Check approval status"}
+              </button>
+            )}
             <button
               type="button"
               className="text-sm underline"
@@ -608,7 +549,7 @@ export function App({
       }
       canViewFieldEngineer={permissions.can("sidebar.field_engineer.view")}
       canViewUpcomingFeatures={permissions.can("sidebar.upcoming_features.view")}
-      canViewCustomerPortal={permissions.can("sidebar.customer_portal.view")}
+      canViewCustomerPortal={auth.hasRole("customer")}
       crumbs={["Home", pageTitles[page]]}
       activeService={activeService}
       onServiceSelect={selectCategory}
@@ -616,12 +557,9 @@ export function App({
       role={role}
       onRoleChange={selectRole}
       projectSection={projectSection}
-      onCreateProjectTicket={createSampleTicket}
       canViewDashboard={permissions.can("sidebar.project_team.dashboard.view")}
       canViewTickets={permissions.can("sidebar.project_team.ticket.view")}
       canViewRoles={permissions.can("sidebar.project_team.role_management.view")}
-      canViewPayment={permissions.can("sidebar.project_team.finance.view")}
-      canCreateTickets={canCreateTickets}
       notifications={notifications}
       onNotificationsOpen={markNotificationsRead}
       onNotificationSelect={openNotification}
@@ -681,6 +619,7 @@ export function App({
       {isProjectPage && (projectSection === "dashboard" || projectSection === "tickets") && (
         <MyBookings
           onBack={goHome}
+          currentUserId={userId}
           customerTickets={customerTickets}
           comments={commentsResult.data}
           commentsError={commentsResult.error?.message ?? null}
@@ -696,7 +635,7 @@ export function App({
           onNotify={addNotification}
         />
       )}
-      {isProjectPage && (projectSection === "roles" || projectSection === "payment") && (
+      {isProjectPage && projectSection === "roles" && (
         <ProjectSettings section={projectSection} onNotify={addNotification} />
       )}
       {modal && (

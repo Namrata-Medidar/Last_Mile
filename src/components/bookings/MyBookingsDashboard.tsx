@@ -36,6 +36,7 @@ function DashboardMetric({
 
 export function ProjectDashboard({ allTickets }: { allTickets: Ticket[] }) {
   const openTickets = allTickets.filter((ticket) => ticket.status === "Open").length;
+  const assignedTickets = allTickets.filter((ticket) => ticket.status === "Assigned").length;
   const activeTickets = allTickets.filter((ticket) => ticket.status === "In Progress").length;
   const completedTickets = allTickets.filter((ticket) => ticket.status === "Closed").length;
   const priorityData = priorities.map((priority) => ({
@@ -52,9 +53,8 @@ export function ProjectDashboard({ allTickets }: { allTickets: Ticket[] }) {
       <div className="mb-4">
         <p className="text-[10px] font-bold uppercase text-primary">Operations overview</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Project dashboard</h1>
-     
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <DashboardMetric
           icon={ReceiptText}
           label="Total tickets"
@@ -66,6 +66,13 @@ export function ProjectDashboard({ allTickets }: { allTickets: Ticket[] }) {
           label="Open"
           value={openTickets}
           detail="Awaiting assignment"
+          tone="text-warning"
+        />
+        <DashboardMetric
+          icon={Clock3}
+          label="Assigned"
+          value={assignedTickets}
+          detail="Waiting for engineer acceptance"
           tone="text-warning"
         />
         <DashboardMetric

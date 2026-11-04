@@ -36,4 +36,25 @@ export const userService = {
     const { error } = await supabase.from("profiles").update(update).eq("id", userId);
     if (error) throw error;
   },
+  async getRoleNames(userId: string): Promise<string[]> {
+    const { data: assignments, error } = await supabase
+      .from("user_roles")
+      .select("role_id")
+      .eq("user_id", userId)
+      .eq("status", "active");
+    if (error) throw error;
+    const ids = [
+      ...new Set((assignments ?? []).flatMap((row) => (row.role_id ? [row.role_id] : []))),
+    ];
+    if (!ids.length) throw new Error("No active role is assigned to your account.");
+    const { data: roles, error: roleError } = await supabase
+      .from("roles")
+      .select("name")
+      .in("id", ids)
+      .eq("is_active", true)
+      .order("name");
+    if (roleError) throw roleError;
+    if (!roles?.length) throw new Error("No active role is assigned to your account.");
+    return [...new Set(roles.map((role) => role.name))];
+  },
 };

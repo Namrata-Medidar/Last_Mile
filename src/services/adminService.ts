@@ -171,7 +171,7 @@ export function summarise(rows: BookingStat[]): Summary {
     revenue: 0,
   };
   for (const r of rows) {
-    if (r.status === "Open") s.open++;
+    if (r.status === "Open" || r.status === "Assigned") s.open++;
     else if (r.status === "In Progress") s.active++;
     else if (r.status === "Closed") {
       s.closed++;

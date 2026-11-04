@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from "react";
 import {
   CalendarDays,
@@ -28,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { BookingAttachment } from "@/services/attachmentService";
 import type { Comment, Ticket, TicketUpdate } from "@/services/bookingService";
+import { engineerService, myEngineerQuery } from "@/services/engineerService";
 import {
   cancellationFeeApplies,
   cancellationWindowDescription,
@@ -41,6 +43,58 @@ import { Conversation, OrderMetric, TicketTabs } from "./MyBookingsWidgets";
 type BookingTab = "public" | "attachments" | "internal";
 type UpdateAction = "edit" | "assignee" | "close";
 type Engineer = { id: string; full_name: string; phone: string | null };
+
+export function TicketAcceptance({
+  ticket,
+  currentUserId,
+}: {
+  ticket: Pick<Ticket, "dbId" | "engineerId" | "status">;
+  currentUserId?: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const engineer = useQuery(myEngineerQuery(currentUserId ?? null));
+  const accept = useMutation({
+    mutationFn: () => engineerService.jobAction(ticket.dbId, "start"),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["bookings"] }),
+        queryClient.invalidateQueries({ queryKey: ["engineer"] }),
+        queryClient.invalidateQueries({ queryKey: ["engineers", "workload"] }),
+      ]);
+      toast.success("Ticket accepted. Work is now In Progress.");
+    },
+    onError: (error: Error) => {
+      console.error("Could not accept ticket.", error);
+      toast.error(error.message || "Could not accept ticket.");
+    },
+  });
+
+  if (!ticket.dbId || !ticket.engineerId || !["Open", "Assigned"].includes(ticket.status))
+    return null;
+  if (engineer.isError)
+    return (
+      <p role="alert" className="self-center text-xs text-destructive">
+        Could not check ticket acceptance access.{" "}
+        <button className="underline" onClick={() => void engineer.refetch()}>
+          Retry
+        </button>
+      </p>
+    );
+  if (!engineer.data || engineer.data.id !== ticket.engineerId) return null;
+
+  return (
+    <Button
+      size="sm"
+      className="h-9 gap-2 rounded-md px-3 text-xs"
+      disabled={accept.isPending || engineer.data.status !== "active"}
+      title={engineer.data.status !== "active" ? "Your engineer account is inactive" : undefined}
+      onClick={() => accept.mutate()}
+    >
+      <CheckCircle2 className="h-4 w-4" />
+      {accept.isPending ? "Accepting..." : "Accept ticket"}
+    </Button>
+  );
+}
 
 type MyBookingDetailsProps = {
   ticket: Ticket;
@@ -145,11 +199,11 @@ export function MyBookingDetails({
 }: MyBookingDetailsProps) {
   const cancellationFeeDue = Boolean(
     cancellationPolicy &&
-      cancellationFeeApplies(cancellationPolicy, {
-        ...(ticket.createdAt ? { createdAt: ticket.createdAt } : {}),
-        ...(ticket.visitDate ? { visitDate: ticket.visitDate } : {}),
-        ...(ticket.visitTime ? { visitTime: ticket.visitTime } : {}),
-      }),
+    cancellationFeeApplies(cancellationPolicy, {
+      ...(ticket.createdAt ? { createdAt: ticket.createdAt } : {}),
+      ...(ticket.visitDate ? { visitDate: ticket.visitDate } : {}),
+      ...(ticket.visitTime ? { visitTime: ticket.visitTime } : {}),
+    }),
   );
   const currentEngineerId =
     ticket.engineerId ??
@@ -174,7 +228,9 @@ export function MyBookingDetails({
         </p>
       </header>
       {!isTeam &&
-        (ticket.status === "Open" || ticket.status === "In Progress") &&
+        (ticket.status === "Open" ||
+          ticket.status === "Assigned" ||
+          ticket.status === "In Progress") &&
         onCancelTicket && (
           <div className="flex justify-end border-b border-border p-3">
             {ticket.customerId !== currentUserId ? (
@@ -317,12 +373,9 @@ export function MyBookingDetails({
         </div>
         {(ticket.dbId || (canCloseTicket && ticket.status !== "Closed")) && (
           <div className="ml-auto flex items-stretch gap-2">
+            <TicketAcceptance ticket={ticket} currentUserId={currentUserId ?? null} />
             {ticket.dbId && (
-              <Button
-                asChild
-                size="sm"
-                className="h-9 gap-2 rounded-md px-3 text-xs shadow-sm"
-              >
+              <Button asChild size="sm" className="h-9 gap-2 rounded-md px-3 text-xs shadow-sm">
                 <Link to="/invoice/$id" params={{ id: ticket.dbId }}>
                   <ReceiptText className="h-4 w-4" />
                   Invoice
@@ -373,16 +426,28 @@ export function MyBookingDetails({
             <span
               className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${isAssigned ? "bg-success/15 text-success" : "bg-warning/15 text-warning"}`}
             >
-              {isAssigned ? <CheckCircle2 className="h-5 w-5" /> : <UserRound className="h-5 w-5" />}
+              {isAssigned ? (
+                <CheckCircle2 className="h-5 w-5" />
+              ) : (
+                <UserRound className="h-5 w-5" />
+              )}
             </span>
             <div>
-              <p className={`text-sm font-semibold ${isAssigned ? "text-success" : "text-warning"}`}>
-                {isAssigned ? "Engineer assigned" : "Assignment pending"}
+              <p
+                className={`text-sm font-semibold ${isAssigned ? "text-success" : "text-warning"}`}
+              >
+                {ticket.status === "In Progress"
+                  ? "Engineer accepted - work in progress"
+                  : isAssigned
+                    ? "Engineer assigned"
+                    : "Assignment pending"}
               </p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {isAssigned
-                  ? `${ticket.engineer} is assigned. Service updates will appear on this order.`
-                  : "The project team has not assigned an engineer yet."}
+                {ticket.status === "In Progress"
+                  ? `${ticket.engineer} has accepted this ticket and started work.`
+                  : isAssigned
+                    ? `${ticket.engineer} is assigned. Waiting for the engineer to accept this ticket.`
+                    : "The project team has not assigned an engineer yet."}
               </p>
             </div>
           </div>
@@ -460,8 +525,6 @@ export function MyBookingDetails({
                   engineerId: selectedEngineerId || null,
                   engineer: engineer?.full_name ?? "Unassigned",
                   assigneePhone: engineer?.phone ?? "",
-                  status: engineer ? "In Progress" : ticket.status,
-                  progress: engineer ? Math.max(ticket.progress, 45) : ticket.progress,
                 },
                 "assignee",
               );
@@ -489,7 +552,7 @@ export function MyBookingDetails({
           </div>
         </div>
       )}
-  
+
       {(activeTab === "public" || (isTeam && activeTab === "internal")) && (
         <Conversation
           channel={activeTab}

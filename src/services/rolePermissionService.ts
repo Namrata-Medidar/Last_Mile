@@ -29,7 +29,7 @@ export type RolePermission = {
 export type UserRoleAssignment = {
   id: string;
   user_id: string;
-  role_id: string;
+  role_id: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -70,7 +70,7 @@ const validateSlug = (slug: string) => {
 
 const validatePermissionCode = (code: string) => {
   if (!/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(code)) {
-    throw new Error("Permission code must use dot-separated lowercase names, e.g. tickets.view.");
+    throw new Error("Permission code must use dot-separated lowercase names, e.g. users.tab_view.");
   }
 };
 
@@ -182,6 +182,14 @@ export const rolePermissionService = {
     return data as AppRole;
   },
 
+  async softDeleteRole(roleId: string): Promise<void> {
+    const { error } = await supabase.rpc("soft_delete_role", {
+      _role_id: roleId,
+    });
+
+    if (error) throw normalizeError(error);
+  },
+
   // -------------------------
   // Permission definitions
   // -------------------------
@@ -275,7 +283,9 @@ export const rolePermissionService = {
 
     if (error) throw normalizeError(error);
 
-    const assignedRoleIds = [...new Set((data ?? []).map((item) => item.role_id))];
+    const assignedRoleIds = [
+      ...new Set((data ?? []).flatMap((item) => (item.role_id ? [item.role_id] : []))),
+    ];
     if (assignedRoleIds.length === 0) return [];
 
     const { data: activeRoles, error: activeRolesError } = await supabase
@@ -340,14 +350,6 @@ export const rolePermissionService = {
 
     if (!role.is_active) {
       throw new Error("Cannot assign an inactive role.");
-    }
-
-    const validRoles = ["super_admin", "admin", "ops_manager", "engineer", "customer"] as const;
-
-    if (!validRoles.includes(role.slug as (typeof validRoles)[number])) {
-      throw new Error(
-        `Role "${role.slug}" cannot be assigned because it does not match an app_role value.`,
-      );
     }
 
     const { error } = await supabase.rpc("assign_user_role", {

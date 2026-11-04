@@ -77,12 +77,21 @@ export function safeRedirect(path: unknown): string {
   if (
     typeof path !== "string" ||
     !path.startsWith("/") ||
-    path.startsWith("//")
+    path.startsWith("//") ||
+    /[\\\u0000-\u0020\u007f]/.test(path)
   ) {
     return "/";
   }
 
-  return path;
+  try {
+    const destination = new URL(path, "https://redirect.invalid");
+    if (destination.origin !== "https://redirect.invalid") return "/";
+    const decodedPath = decodeURIComponent(destination.pathname);
+    if (decodedPath.startsWith("//") || /[\\\u0000-\u0020\u007f]/.test(decodedPath)) return "/";
+    return destination.pathname;
+  } catch {
+    return "/";
+  }
 }
 
 export const authService = {
@@ -111,22 +120,6 @@ signUp: async (input: {
       },
     },
   });
-
-  if (result.error) {
-    console.error("SIGNUP ERROR:", {
-      message: result.error.message,
-      status: result.error.status,
-      name: result.error.name,
-    });
-  } else {
-    console.log("SIGNUP RESPONSE:", {
-      userCreated: Boolean(result.data.user),
-      sessionCreated: Boolean(result.data.session),
-      userId: result.data.user?.id,
-      emailConfirmationPending:
-        Boolean(result.data.user) && !result.data.session,
-    });
-  }
 
   return result;
 },
@@ -168,8 +161,10 @@ signUp: async (input: {
   signOut: async (scope: "global" | "local" = "local") => {
   const result = await supabase.auth.signOut({ scope });
 
-  if (!result.error) {
-    localStorage.removeItem("access_token");
+  if (!result.error && typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem("access_token");
+    } catch {}
   }
 
   return result;

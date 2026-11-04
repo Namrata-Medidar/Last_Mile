@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const allowedRoles = new Set(["super_admin", "admin", "ops_manager", "engineer", "customer"]);
+const systemRoleSlugs = new Set(["super_admin", "admin", "ops_manager", "engineer", "customer"]);
 
 type UserInput = {
   full_name: string;
@@ -39,7 +39,7 @@ function isUserInput(value: unknown): value is UserInput {
     user.email.length <= 255 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email) &&
     typeof user.role === "string" &&
-    allowedRoles.has(user.role)
+    /^[a-z][a-z0-9_]*$/.test(user.role)
   );
 }
 
@@ -95,7 +95,7 @@ Deno.serve(async (request) => {
     const [permissionResult, adminRoleResult, superAdminRoleResult] = await Promise.all([
       callerClient.rpc("has_permission", {
         _user_id: userData.user.id,
-        _permission_code: "users.assign_role",
+        _permission_code: "users.role_management",
       }),
       callerClient.rpc("has_role", { _user_id: userData.user.id, _role: "admin" }),
       callerClient.rpc("has_role", { _user_id: userData.user.id, _role: "super_admin" }),
@@ -151,7 +151,7 @@ Deno.serve(async (request) => {
           .eq("slug", roleSlug)
           .maybeSingle();
         if (roleError) throw new Error("Could not verify the selected role.");
-        if (!role?.is_active || !allowedRoles.has(role.slug)) {
+        if (!role?.is_active) {
           throw new Error("The selected role is unavailable.");
         }
         if (roleSlug === "super_admin" && !superAdminRoleResult.data) {
@@ -183,15 +183,16 @@ Deno.serve(async (request) => {
           .eq("id", createdUserId);
         if (profileError) throw new Error("Could not save the user profile.");
 
+        const isSystemRole = systemRoleSlugs.has(roleSlug);
         const { error: assignError } = await adminClient.from("user_roles").upsert(
           {
             user_id: createdUserId,
             role_id: role.id,
-            role: roleSlug,
+            role: isSystemRole ? roleSlug : null,
             status: "active",
             created_by: userData.user.id,
           },
-          { onConflict: "user_id,role" },
+          { onConflict: isSystemRole ? "user_id,role" : "user_id,role_id" },
         );
         if (assignError) throw new Error("Could not assign the selected role.");
 

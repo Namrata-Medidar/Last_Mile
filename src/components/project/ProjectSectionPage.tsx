@@ -20,10 +20,6 @@ const sectionPages: Record<string, { page: AppPage; permissions?: string[] }> = 
     page: "project-roles",
     permissions: ["sidebar.project_team.role_management.view"],
   },
-  "/admin/payment": {
-    page: "project-payment",
-    permissions: ["sidebar.project_team.finance.view"],
-  },
 };
 
 export function ProjectSectionPage() {
