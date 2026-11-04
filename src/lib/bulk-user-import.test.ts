@@ -4,6 +4,8 @@ import { parseBulkUserFile, toSafeCsvCell, type BulkAssignableRole } from "./bul
 const roles: BulkAssignableRole[] = [
   { id: "role-engineer", slug: "engineer", name: "Engineer", is_active: true },
   { id: "role-admin", slug: "admin", name: "Admin", is_active: true },
+  { id: "role-support", slug: "support_manager", name: "Support Manager", is_active: true },
+  { id: "role-inactive", slug: "inactive_role", name: "Inactive Role", is_active: false },
 ];
 
 function csvFile(content: string, name = "users.csv") {
@@ -46,9 +48,20 @@ describe("parseBulkUserFile", () => {
     expect(preview.rows[0]?.company).toBe("Example, Inc");
   });
 
-  it("rejects inactive or non-assignable roles", async () => {
+  it("accepts active custom roles and rejects inactive roles", async () => {
+    const customRolePreview = await parseBulkUserFile(
+      csvFile(
+        "Full name,Company,Phone,Work email,Role\nAsha,Co,9876543210,asha@example.com,Support Manager",
+      ),
+      roles,
+    );
+    expect(customRolePreview.errors).toEqual([]);
+    expect(customRolePreview.rows[0]?.role).toBe("support_manager");
+
     const preview = await parseBulkUserFile(
-      csvFile("Full name,Company,Phone,Work email,Role\nAsha,Co,9876543210,asha@example.com,Owner"),
+      csvFile(
+        "Full name,Company,Phone,Work email,Role\nAsha,Co,9876543210,asha@example.com,Inactive Role",
+      ),
       roles,
     );
 

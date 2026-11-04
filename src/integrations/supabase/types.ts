@@ -625,49 +625,49 @@ export type Database = {
       };
       customer_details: {
         Row: {
-          address: string | null
-          city: string | null
-          company: string | null
-          created_at: string | null
-          id: string
-          poc: string | null
-          poc_no: string | null
-          priority: string | null
-          site_readiness: string | null
-          status: string | null
-          store_code: string
-          store_name: string | null
-        }
+          address: string | null;
+          city: string | null;
+          company: string | null;
+          created_at: string | null;
+          id: string;
+          poc: string | null;
+          poc_no: string | null;
+          priority: string | null;
+          site_readiness: string | null;
+          status: string | null;
+          store_code: string;
+          store_name: string | null;
+        };
         Insert: {
-          address?: string | null
-          city?: string | null
-          company?: string | null
-          created_at?: string | null
-          id?: string
-          poc?: string | null
-          poc_no?: string | null
-          priority?: string | null
-          site_readiness?: string | null
-          status?: string | null
-          store_code: string
-          store_name?: string | null
-        }
+          address?: string | null;
+          city?: string | null;
+          company?: string | null;
+          created_at?: string | null;
+          id?: string;
+          poc?: string | null;
+          poc_no?: string | null;
+          priority?: string | null;
+          site_readiness?: string | null;
+          status?: string | null;
+          store_code: string;
+          store_name?: string | null;
+        };
         Update: {
-          address?: string | null
-          city?: string | null
-          company?: string | null
-          created_at?: string | null
-          id?: string
-          poc?: string | null
-          poc_no?: string | null
-          priority?: string | null
-          site_readiness?: string | null
-          status?: string | null
-          store_code?: string
-          store_name?: string | null
-        }
-        Relationships: []
-      }
+          address?: string | null;
+          city?: string | null;
+          company?: string | null;
+          created_at?: string | null;
+          id?: string;
+          poc?: string | null;
+          poc_no?: string | null;
+          priority?: string | null;
+          site_readiness?: string | null;
+          status?: string | null;
+          store_code?: string;
+          store_name?: string | null;
+        };
+        Relationships: [];
+      };
       rate_cards: {
         Row: {
           card_code: string;
@@ -800,12 +800,91 @@ export type Database = {
         };
         Relationships: [];
       };
+      permissions: {
+        Row: {
+          code: string;
+          created_at: string;
+          description: string | null;
+          id: string;
+          module: string;
+        };
+        Insert: {
+          code: string;
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          module: string;
+        };
+        Update: {
+          code?: string;
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          module?: string;
+        };
+        Relationships: [];
+      };
+      role_permissions: {
+        Row: {
+          created_at: string;
+          id: string;
+          permission_id: string;
+          role_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          permission_id: string;
+          role_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          permission_id?: string;
+          role_id?: string;
+        };
+        Relationships: [];
+      };
+      roles: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          id: string;
+          is_active: boolean;
+          is_system: boolean;
+          name: string;
+          slug: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          is_active?: boolean;
+          is_system?: boolean;
+          name: string;
+          slug: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          is_active?: boolean;
+          is_system?: boolean;
+          name?: string;
+          slug?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       user_roles: {
         Row: {
           created_at: string;
           created_by: string | null;
           id: string;
-          role: Database["public"]["Enums"]["app_role"];
+          role: Database["public"]["Enums"]["app_role"] | null;
+          role_id: string | null;
           status: string;
           updated_at: string;
           updated_by: string | null;
@@ -815,7 +894,8 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
-          role: Database["public"]["Enums"]["app_role"];
+          role?: Database["public"]["Enums"]["app_role"] | null;
+          role_id?: string | null;
           status?: string;
           updated_at?: string;
           updated_by?: string | null;
@@ -825,7 +905,8 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
-          role?: Database["public"]["Enums"]["app_role"];
+          role?: Database["public"]["Enums"]["app_role"] | null;
+          role_id?: string | null;
           status?: string;
           updated_at?: string;
           updated_by?: string | null;
@@ -838,12 +919,24 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      assign_user_role: {
+        Args: { _role_id: string; _user_ids: string[] };
+        Returns: undefined;
+      };
       cancel_my_booking: {
         Args: { _booking_id: string };
         Returns: undefined;
       };
+      has_permission: {
+        Args: { _permission_code: string; _user_id: string };
+        Returns: boolean;
+      };
       set_user_account_approval: {
         Args: { _status: string; _user_id: string };
+        Returns: undefined;
+      };
+      soft_delete_user: {
+        Args: { _user_id: string };
         Returns: undefined;
       };
       assign_engineer: { Args: { _booking_id: string }; Returns: string };
@@ -876,7 +969,22 @@ export type Database = {
         };
         Returns: undefined;
       };
-      set_my_availability: { Args: { _available: boolean }; Returns: undefined };
+      revoke_user_roles: {
+        Args: { _assignment_ids: string[] };
+        Returns: undefined;
+      };
+      save_role_permissions: {
+        Args: { _permission_ids: string[]; _role_id: string };
+        Returns: undefined;
+      };
+      soft_delete_role: {
+        Args: { _role_id: string };
+        Returns: undefined;
+      };
+      set_role_active: {
+        Args: { _is_active: boolean; _role_id: string };
+        Returns: undefined;
+      };
       set_user_role: {
         Args: {
           _grant: boolean;

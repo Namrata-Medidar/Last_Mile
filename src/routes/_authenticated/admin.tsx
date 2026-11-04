@@ -62,6 +62,8 @@ function AdminPage() {
   const permissions = usePermissions();
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   const isSuperAdmin = roles.includes("super_admin");
+  const canViewAdmin = permissions.can("sidebar.admin.view");
+  const canManageEngineerDispatch = isStaff || permissions.can("users.engineer_dispatch");
 
   if (permissions.isLoading)
     return (
@@ -70,7 +72,7 @@ function AdminPage() {
       </div>
     );
 
-  if (permissions.error || !permissions.can("sidebar.admin.view"))
+  if (permissions.error || (!canViewAdmin && !canManageEngineerDispatch))
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
         <div>
@@ -127,30 +129,36 @@ function AdminPage() {
         )}
         <Tabs
           defaultValue={
-            tab === "engineers" && isStaff
+            tab === "engineers" && canManageEngineerDispatch
               ? "engineers"
-              : permissions.can("tickets.view")
+              : permissions.can("sidebar.project_team.ticket.view")
                 ? "dashboard"
-                : "billing"
+                : canViewAdmin
+                  ? "billing"
+                  : "engineers"
           }
         >
           <TabsList>
-            {permissions.can("tickets.view") && (
+            {permissions.can("sidebar.project_team.ticket.view") && (
               <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             )}
-            <TabsTrigger value="billing">Payments</TabsTrigger>
+            {canViewAdmin && <TabsTrigger value="billing">Payments</TabsTrigger>}
             {isAdmin && <TabsTrigger value="pricing">Prices</TabsTrigger>}
             {isAdmin && <TabsTrigger value="audit">Change history</TabsTrigger>}
-            {isStaff && <TabsTrigger value="engineers">Engineers &amp; dispatch</TabsTrigger>}
+            {canManageEngineerDispatch && (
+              <TabsTrigger value="engineers">Engineers &amp; dispatch</TabsTrigger>
+            )}
           </TabsList>
-          {permissions.can("tickets.view") && (
+          {permissions.can("sidebar.project_team.ticket.view") && (
             <TabsContent value="dashboard">
-              <Dashboard enabled={isStaff && permissions.can("tickets.view")} />
+              <Dashboard enabled={isStaff && permissions.can("sidebar.project_team.ticket.view")} />
             </TabsContent>
           )}
-          <TabsContent value="billing">
-            <BillingPanel />
-          </TabsContent>
+          {canViewAdmin && (
+            <TabsContent value="billing">
+              <BillingPanel />
+            </TabsContent>
+          )}
           {isAdmin && (
             <TabsContent value="pricing">
               <Pricing isSuperAdmin={isSuperAdmin} />
@@ -161,7 +169,7 @@ function AdminPage() {
               <Audit />
             </TabsContent>
           )}
-          {isStaff && (
+          {canManageEngineerDispatch && (
             <TabsContent value="engineers">
               <EngineerDispatchPanel />
             </TabsContent>

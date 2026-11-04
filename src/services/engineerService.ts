@@ -11,9 +11,7 @@ export type Engineer = {
   mode: string;
   city: string;
   kit: string | null;
-  approval_status: "pending" | "approved" | "rejected" | "suspended";
-  available: boolean;
-  max_active_jobs: number;
+  approval_status: "pending" | "approved";
   rating: number;
   ratings_count: number;
   status: string;
@@ -21,16 +19,7 @@ export type Engineer = {
 
 export type EngineerProfileUpdate = Pick<
   Engineer,
-  | "full_name"
-  | "phone"
-  | "grade"
-  | "mode"
-  | "city"
-  | "kit"
-  | "approval_status"
-  | "available"
-  | "max_active_jobs"
-  | "status"
+  "full_name" | "phone" | "grade" | "mode" | "city" | "kit" | "status"
 >;
 
 export type EngineerProfilePatch = Partial<EngineerProfileUpdate>;
@@ -52,7 +41,7 @@ export type Job = {
 };
 
 const ENGINEER_COLS =
-  "id, user_id, full_name, phone, grade, mode, city, kit, approval_status, available, max_active_jobs, rating, ratings_count, status";
+  "id, user_id, full_name, phone, grade, mode, city, kit, approval_status, rating, ratings_count, status";
 
 export const myEngineerQuery = (userId: string | null) =>
   queryOptions({
@@ -125,6 +114,7 @@ export const allEngineersQuery = queryOptions({
     const { data, error } = await supabase
       .from("engineers")
       .select(ENGINEER_COLS)
+      .eq("approval_status", "approved")
       .order("created_at", { ascending: false });
     if (error) throw error;
     return (data ?? []) as Engineer[];
@@ -140,7 +130,7 @@ export const engineerWorkloadQuery = (enabled: boolean) =>
         .from("bookings")
         .select("engineer_id")
         .not("engineer_id", "is", null)
-        .in("status", ["Open", "In Progress"]);
+        .in("status", ["Open", "Assigned", "In Progress"]);
       if (error) throw error;
 
       return (data ?? []).reduce<Record<string, number>>((counts, booking) => {
@@ -185,18 +175,6 @@ export const engineerService = {
     },
   ) {
     const { error } = await supabase.from("engineers").insert({ user_id: userId, ...input });
-    if (error) throw error;
-  },
-  async setAvailable(id: string, available: boolean) {
-    const { error } = await supabase.from("engineers").update({ available }).eq("id", id);
-    if (error) throw error;
-  },
-  async setMyAvailability(available: boolean) {
-    const { error } = await supabase.rpc("set_my_availability", { _available: available });
-    if (error) throw error;
-  },
-  async setApproval(id: string, approval_status: Engineer["approval_status"]) {
-    const { error } = await supabase.from("engineers").update({ approval_status }).eq("id", id);
     if (error) throw error;
   },
   async updateProfile(id: string, profile: EngineerProfilePatch) {

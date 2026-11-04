@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { HardHat, Search, Users, ShieldCheck, UserRoundX, UserPlus, X } from "lucide-react";
+import { HardHat, Search, Users, ShieldCheck, UserRoundX, UserPlus, Trash2, X } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermission";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,13 +28,12 @@ type UserAssignment = {
   id: string;
   user_id: string;
   role_id: string | null;
-  role: string;
+  role: string | null;
   status: string;
   created_at: string;
 };
 
 type FilterRole = "All Users" | string;
-type RoleDialogAction = "assign" | "revoke" | null;
 
 function assignmentMatchesRole(assignment: UserAssignment, role: AppRole): boolean {
   return assignment.role_id === role.id;
@@ -44,16 +43,19 @@ export function UserRoleAssignment() {
   const queryClient = useQueryClient();
   const permissions = usePermissions();
   const auth = useAuth();
-  const canAssignRoles = permissions.can("users.assign_role");
-  const canRevokeRoles = permissions.can("users.revoke_role");
-  const canApproveUsers = auth.hasRole("super_admin");
+  const canManageUserRoles = permissions.can("users.role_management");
+  const canAssignRoles = canManageUserRoles;
+  const canRevokeRoles = canManageUserRoles;
+  const canDeleteUsers = permissions.can("users.delete");
+  const canApproveUsers = permissions.can("users.approve_reject");
+  const canViewEngineerDispatch = permissions.can("users.engineer_dispatch");
   const [selectedRole, setSelectedRole] = useState<FilterRole>("All Users");
   const [search, setSearch] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [roleDialogUserIds, setRoleDialogUserIds] = useState<string[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
-  const [initialRoleIds, setInitialRoleIds] = useState<string[]>([]);
-  const [roleDialogAction, setRoleDialogAction] = useState<RoleDialogAction>(null);
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [notice, setNotice] = useState("");
 
   const {
@@ -80,14 +82,36 @@ export function UserRoleAssignment() {
 
       if (error) throw error;
 
-      return (data ?? []) as UserProfile[];
+      return (data ?? []).filter((profile) => profile.status !== "deleted") as UserProfile[];
     },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      if (!canDeleteUsers) {
+        throw new Error("Missing permission: users.delete");
+      }
+      const { error } = await supabase.rpc("soft_delete_user", { _user_id: userId });
+      if (error) throw error;
+    },
+    onSuccess: async (_result, deletedUserId) => {
+      setUserToDelete(null);
+      setSelectedUserIds((current) => current.filter((userId) => userId !== deletedUserId));
+      setNotice("User account soft-deleted successfully.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["user-profiles"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-role-assignments"] }),
+        queryClient.invalidateQueries({ queryKey: ["role-assignment-people"] }),
+        queryClient.invalidateQueries({ queryKey: ["engineers"] }),
+      ]);
+    },
+    onError: (error: Error) => setNotice(error.message),
   });
 
   const approvalMutation = useMutation({
     mutationFn: async ({ userId, status }: { userId: string; status: "active" | "rejected" }) => {
       if (!canApproveUsers) {
-        throw new Error("Only a super admin can approve or reject accounts.");
+        throw new Error("Missing permission: users.approve_reject");
       }
       const { error } = await supabase.rpc("set_user_account_approval", {
         _user_id: userId,
@@ -166,26 +190,49 @@ export function UserRoleAssignment() {
     return matchesRole && matchesSearch;
   });
 
-  const assignMutation = useMutation({
+  const saveRolesMutation = useMutation({
     mutationFn: async ({ userIds, roleIds }: { userIds: string[]; roleIds: string[] }) => {
-      if (!canAssignRoles) {
-        throw new Error("Missing permission: users.assign_role");
+      if (userIds.length === 0) throw new Error("Select at least one user.");
+
+      const currentAssignments = assignments.filter(
+        (assignment) => userIds.includes(assignment.user_id) && assignment.status === "active",
+      );
+      const addedRoleIds = roleIds.filter(
+        (roleId) =>
+          !userIds.every((userId) =>
+            currentAssignments.some(
+              (assignment) => assignment.user_id === userId && assignment.role_id === roleId,
+            ),
+          ),
+      );
+      const removedAssignments = currentAssignments.filter(
+        (assignment) => assignment.role_id && !roleIds.includes(assignment.role_id),
+      );
+
+      if (addedRoleIds.length > 0 && !canAssignRoles) {
+        throw new Error("Missing permission: users.role_management");
       }
-      if (userIds.length === 0 || roleIds.length === 0) {
-        throw new Error("Select at least one user and one role.");
+      if (removedAssignments.length > 0 && !canRevokeRoles) {
+        throw new Error("Missing permission: users.role_management");
       }
 
-      for (const [index, roleId] of roleIds.entries()) {
-        try {
-          await rolePermissionService.assignRoleToUsers(userIds, roleId);
-        } catch (error) {
-          const roleName = activeRoles.find((role) => role.id === roleId)?.name ?? "role";
-          const detail = error instanceof Error ? error.message : "Unexpected error.";
-          const partialMessage =
-            index > 0 ? `${index} role(s) were processed before this failure. ` : "";
-          throw new Error(`${partialMessage}Could not assign ${roleName}: ${detail}`);
+      for (const roleId of addedRoleIds) {
+        const usersToAssign = userIds.filter(
+          (userId) =>
+            !currentAssignments.some(
+              (assignment) => assignment.user_id === userId && assignment.role_id === roleId,
+            ),
+        );
+        if (usersToAssign.length > 0) {
+          await rolePermissionService.assignRoleToUsers(usersToAssign, roleId);
         }
       }
+
+      if (removedAssignments.length > 0) {
+        await rolePermissionService.revokeUserRoles(
+          removedAssignments.map((assignment) => assignment.id),
+        );
+      }
     },
     onSuccess: async () => {
       setSelectedUserIds((current) =>
@@ -193,53 +240,14 @@ export function UserRoleAssignment() {
       );
       setRoleDialogUserIds([]);
       setSelectedRoleIds([]);
-      setInitialRoleIds([]);
-      setRoleDialogAction(null);
-      setNotice("Selected role(s) assigned successfully.");
+      setRoleDialogOpen(false);
+      setNotice("User roles updated successfully.");
       await queryClient.invalidateQueries({
         queryKey: ["user-role-assignments"],
       });
+      await queryClient.invalidateQueries({ queryKey: ["role-assignment-people"] });
       await queryClient.invalidateQueries({ queryKey: ["engineers"] });
       await queryClient.invalidateQueries({ queryKey: ["user-profiles"] });
-    },
-    onError: (error: Error) => {
-      setNotice(error.message);
-      void queryClient.invalidateQueries({ queryKey: ["user-role-assignments"] });
-    },
-  });
-
-  const revokeMutation = useMutation({
-    mutationFn: async (roleIds: string[]) => {
-      if (!canRevokeRoles) {
-        throw new Error("Missing permission: users.revoke_role");
-      }
-      const rolesToRevoke = activeRoles.filter((role) => roleIds.includes(role.id));
-      const assignmentIds = assignments
-        .filter(
-          (assignment) =>
-            roleDialogUserIds.includes(assignment.user_id) &&
-            assignment.status === "active" &&
-            rolesToRevoke.some((role) => assignmentMatchesRole(assignment, role)),
-        )
-        .map((assignment) => assignment.id);
-      if (assignmentIds.length === 0) {
-        throw new Error("The selected users do not have any of the selected roles.");
-      }
-      await rolePermissionService.revokeUserRoles(assignmentIds);
-    },
-    onSuccess: async () => {
-      setSelectedUserIds((current) =>
-        current.filter((userId) => !roleDialogUserIds.includes(userId)),
-      );
-      setRoleDialogUserIds([]);
-      setSelectedRoleIds([]);
-      setInitialRoleIds([]);
-      setRoleDialogAction(null);
-      setNotice("Selected role(s) revoked successfully.");
-      await queryClient.invalidateQueries({
-        queryKey: ["user-role-assignments"],
-      });
-      await queryClient.invalidateQueries({ queryKey: ["engineers"] });
     },
     onError: (error: Error) => {
       setNotice(error.message);
@@ -261,40 +269,23 @@ export function UserRoleAssignment() {
     );
   };
 
-  const openRoleDialog = (
-    action: Exclude<RoleDialogAction, null>,
-    userIds: string[] = selectedUserIds,
-  ) => {
-    if (action === "assign" && !canAssignRoles) return;
-    if (action === "revoke" && !canRevokeRoles) return;
+  const openRoleDialog = (userIds: string[] = selectedUserIds) => {
+    if (!canAssignRoles && !canRevokeRoles) return;
     if (userIds.length === 0) return;
     setRoleDialogUserIds(userIds);
-    setRoleDialogAction(action);
-    const assignedRoleIds =
-      action === "revoke"
-        ? activeRoles
-            .filter((role) =>
-              assignments.some(
-                (assignment) =>
-                  userIds.includes(assignment.user_id) &&
-                  assignmentMatchesRole(assignment, role) &&
-                  assignment.status === "active",
-              ),
-            )
-            .map((role) => role.id)
-        : activeRoles
-            .filter((role) =>
-              userIds.every((userId) =>
-                assignments.some(
-                  (assignment) =>
-                    assignment.user_id === userId &&
-                    assignmentMatchesRole(assignment, role) &&
-                    assignment.status === "active",
-                ),
-              ),
-            )
-            .map((role) => role.id);
-    setInitialRoleIds(assignedRoleIds);
+    setRoleDialogOpen(true);
+    const assignedRoleIds = activeRoles
+      .filter((role) =>
+        userIds.every((userId) =>
+          assignments.some(
+            (assignment) =>
+              assignment.user_id === userId &&
+              assignmentMatchesRole(assignment, role) &&
+              assignment.status === "active",
+          ),
+        ),
+      )
+      .map((role) => role.id);
     setSelectedRoleIds(assignedRoleIds);
     setNotice("");
   };
@@ -306,22 +297,10 @@ export function UserRoleAssignment() {
   };
 
   const closeRoleDialog = () => {
-    setRoleDialogAction(null);
+    setRoleDialogOpen(false);
     setRoleDialogUserIds([]);
     setSelectedRoleIds([]);
-    setInitialRoleIds([]);
   };
-
-  const roleIdsToRevoke = initialRoleIds.filter((roleId) => !selectedRoleIds.includes(roleId));
-
-  const rolesAvailableToRevoke = activeRoles.filter((role) =>
-    assignments.some(
-      (assignment) =>
-        roleDialogUserIds.includes(assignment.user_id) &&
-        assignmentMatchesRole(assignment, role) &&
-        assignment.status === "active",
-    ),
-  );
 
   if (permissions.isLoading) {
     return <div className="p-8 text-center text-sm text-gray-500">Checking user permissions…</div>;
@@ -351,7 +330,6 @@ export function UserRoleAssignment() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900">User Role Assignments</h2>
-          <p className="mt-1 text-sm text-gray-500">View users and manage their assigned roles.</p>
         </div>
         {canAssignRoles && (
           <BulkUserUpload
@@ -360,6 +338,7 @@ export function UserRoleAssignment() {
               await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ["user-profiles"] }),
                 queryClient.invalidateQueries({ queryKey: ["user-role-assignments"] }),
+                queryClient.invalidateQueries({ queryKey: ["role-assignment-people"] }),
                 queryClient.invalidateQueries({ queryKey: ["engineers"] }),
               ]);
             }}
@@ -466,30 +445,16 @@ export function UserRoleAssignment() {
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                {selectedUserIds.length > 0 && (
-                  <>
-                    {canAssignRoles && (
-                      <button
-                        type="button"
-                        disabled={assignMutation.isPending}
-                        onClick={() => openRoleDialog("assign")}
-                        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        <UserPlus size={15} />
-                        Assign Role ({selectedUserIds.length})
-                      </button>
-                    )}
-                    {canRevokeRoles && (
-                      <button
-                        type="button"
-                        disabled={revokeMutation.isPending}
-                        onClick={() => openRoleDialog("revoke")}
-                        className="shrink-0 rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        Revoke Role ({selectedUserIds.length})
-                      </button>
-                    )}
-                  </>
+                {selectedUserIds.length > 0 && (canAssignRoles || canRevokeRoles) && (
+                  <button
+                    type="button"
+                    disabled={saveRolesMutation.isPending}
+                    onClick={() => openRoleDialog()}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <UserPlus size={15} />
+                    Manage Roles ({selectedUserIds.length})
+                  </button>
                 )}
 
                 <div className="relative w-full sm:max-w-xs">
@@ -517,11 +482,7 @@ export function UserRoleAssignment() {
                           type="checkbox"
                           aria-label="Select all filtered users"
                           checked={allVisibleUsersSelected}
-                          disabled={
-                            assignMutation.isPending ||
-                            revokeMutation.isPending ||
-                            approvalMutation.isPending
-                          }
+                          disabled={saveRolesMutation.isPending || approvalMutation.isPending}
                           onChange={() =>
                             setSelectedUserIds((current) =>
                               allVisibleUsersSelected
@@ -553,8 +514,7 @@ export function UserRoleAssignment() {
                               onChange={() => toggleUserSelection(user.id)}
                               disabled={
                                 user.status !== "active" ||
-                                assignMutation.isPending ||
-                                revokeMutation.isPending ||
+                                saveRolesMutation.isPending ||
                                 approvalMutation.isPending
                               }
                             />
@@ -593,7 +553,7 @@ export function UserRoleAssignment() {
 
                         <td className="px-5 py-4">
                           <div className="flex justify-end gap-2">
-                            {auth.hasRole("super_admin") &&
+                            {canViewEngineerDispatch &&
                               assignedRoles.some((role) => role.slug === "engineer") && (
                                 <Link
                                   to="/admin"
@@ -606,6 +566,22 @@ export function UserRoleAssignment() {
                                   Engineers &amp; dispatch
                                 </Link>
                               )}
+                            {canDeleteUsers && user.id !== auth.userId && (
+                              <button
+                                type="button"
+                                aria-label={`Delete ${user.full_name || user.email || "user"}`}
+                                title="Soft-delete user account"
+                                disabled={deleteUserMutation.isPending}
+                                onClick={() => {
+                                  setNotice("");
+                                  deleteUserMutation.reset();
+                                  setUserToDelete(user);
+                                }}
+                                className="inline-flex items-center justify-center rounded-lg border border-red-200 p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
                             {canApproveUsers &&
                               (user.status === "pending" || user.status === "rejected") && (
                                 <>
@@ -639,24 +615,14 @@ export function UserRoleAssignment() {
                                   )}
                                 </>
                               )}
-                            {canAssignRoles && user.status === "active" && (
+                            {(canAssignRoles || canRevokeRoles) && user.status === "active" && (
                               <button
                                 type="button"
-                                disabled={assignMutation.isPending || revokeMutation.isPending}
-                                onClick={() => openRoleDialog("assign", [user.id])}
+                                disabled={saveRolesMutation.isPending}
+                                onClick={() => openRoleDialog([user.id])}
                                 className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                               >
-                                Assign
-                              </button>
-                            )}
-                            {canRevokeRoles && assignedRoles.length > 0 && (
-                              <button
-                                type="button"
-                                disabled={assignMutation.isPending || revokeMutation.isPending}
-                                onClick={() => openRoleDialog("revoke", [user.id])}
-                                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                              >
-                                Revoke
+                                Manage Roles
                               </button>
                             )}
                           </div>
@@ -680,81 +646,109 @@ export function UserRoleAssignment() {
       )}
 
       <Dialog
-        open={roleDialogAction !== null}
+        open={roleDialogOpen}
         onOpenChange={(open) => {
           if (!open) closeRoleDialog();
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {roleDialogAction === "assign" ? "Assign roles" : "Revoke roles"}
-            </DialogTitle>
+            <DialogTitle>Manage user roles</DialogTitle>
             <DialogDescription>
-              {roleDialogAction === "assign"
-                ? `Select roles to assign to ${roleDialogUserIds.length} selected user(s). Already assigned roles are checked.`
-                : `Uncheck roles to revoke from ${roleDialogUserIds.length} selected user(s).`}
+              Check roles to assign or leave unchecked to remove them from{" "}
+              {roleDialogUserIds.length} selected user(s).
             </DialogDescription>
           </DialogHeader>
 
           <div className="max-h-72 space-y-2 overflow-y-auto py-1">
-            {(roleDialogAction === "revoke" ? rolesAvailableToRevoke : activeRoles).map((role) => (
-              <label
-                key={role.id}
-                className="flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm hover:bg-muted/50"
-              >
-                <Checkbox
-                  checked={selectedRoleIds.includes(role.id)}
-                  disabled={assignMutation.isPending || revokeMutation.isPending}
-                  onCheckedChange={() => toggleRoleSelection(role.id)}
-                />
-                <span>{role.name}</span>
-              </label>
-            ))}
-            {roleDialogAction === "revoke" && rolesAvailableToRevoke.length === 0 && (
-              <p className="py-4 text-sm text-muted-foreground">
-                The selected users have no active roles to revoke.
-              </p>
-            )}
+            {activeRoles.map((role) => {
+              const isSelected = selectedRoleIds.includes(role.id);
+
+              return (
+                <label
+                  key={role.id}
+                  className="flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm hover:bg-muted/50"
+                >
+                  <Checkbox
+                    checked={isSelected}
+                    disabled={
+                      saveRolesMutation.isPending ||
+                      (isSelected ? !canRevokeRoles : !canAssignRoles)
+                    }
+                    onCheckedChange={() => toggleRoleSelection(role.id)}
+                  />
+                  <span>{role.name}</span>
+                </label>
+              );
+            })}
           </div>
 
           <DialogFooter>
             <button
               type="button"
               onClick={closeRoleDialog}
-              disabled={assignMutation.isPending || revokeMutation.isPending}
+              disabled={saveRolesMutation.isPending}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               Cancel
             </button>
-            {roleDialogAction === "assign" && (
-              <button
-                type="button"
-                disabled={!selectedRoleIds.length || assignMutation.isPending}
-                onClick={() =>
-                  assignMutation.mutate({ userIds: roleDialogUserIds, roleIds: selectedRoleIds })
-                }
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {assignMutation.isPending ? "Assigning..." : "Assign selected"}
-              </button>
-            )}
-            {roleDialogAction === "revoke" && (
-              <button
-                type="button"
-                disabled={
-                  !roleIdsToRevoke.length ||
-                  revokeMutation.isPending ||
-                  !rolesAvailableToRevoke.length
-                }
-                onClick={() => revokeMutation.mutate(roleIdsToRevoke)}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {revokeMutation.isPending
-                  ? "Revoking..."
-                  : `Revoke unchecked (${roleIdsToRevoke.length})`}
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={saveRolesMutation.isPending}
+              onClick={() =>
+                saveRolesMutation.mutate({
+                  userIds: roleDialogUserIds,
+                  roleIds: selectedRoleIds,
+                })
+              }
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saveRolesMutation.isPending ? "Saving..." : "Save roles"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={userToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteUserMutation.isPending) setUserToDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete user account?</DialogTitle>
+            <DialogDescription>
+              Soft-delete the account for{" "}
+              <span className="font-medium text-foreground">
+                {userToDelete?.full_name || userToDelete?.email || "this user"}
+              </span>
+              ? The account will lose access and its role assignments will be deactivated.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteUserMutation.error && (
+            <p role="alert" className="text-sm text-red-700">
+              {deleteUserMutation.error.message}
+            </p>
+          )}
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setUserToDelete(null)}
+              disabled={deleteUserMutation.isPending}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!userToDelete || deleteUserMutation.isPending}
+              onClick={() => {
+                if (userToDelete) deleteUserMutation.mutate(userToDelete.id);
+              }}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {deleteUserMutation.isPending ? "Deleting..." : "Delete user"}
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

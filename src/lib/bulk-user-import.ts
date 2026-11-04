@@ -22,13 +22,6 @@ export type BulkUserImportPreview = {
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const MAX_ROWS = 100;
-const ASSIGNABLE_ROLE_SLUGS = new Set([
-  "super_admin",
-  "admin",
-  "ops_manager",
-  "engineer",
-  "customer",
-]);
 const REQUIRED_HEADERS = ["fullname", "company", "phone", "workemail", "role"] as const;
 
 function parseCsv(text: string): string[][] {
@@ -115,9 +108,7 @@ function normalizeRows(matrix: string[][], roles: BulkAssignableRole[]): BulkUse
     };
   }
 
-  const roleOptions = roles.filter(
-    (role) => role.is_active && ASSIGNABLE_ROLE_SLUGS.has(role.slug),
-  );
+  const roleOptions = roles.filter((role) => role.is_active);
   const roleByValue = new Map<string, string>();
   for (const role of roleOptions) {
     roleByValue.set(role.slug.toLowerCase(), role.slug);

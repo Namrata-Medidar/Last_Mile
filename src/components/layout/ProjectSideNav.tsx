@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { BarChart3, ClipboardList, CreditCard, Plus, UsersRound } from "lucide-react";
+import { BarChart3, ClipboardList, UsersRound } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 
@@ -12,23 +12,13 @@ const items = [
   },
   { id: "tickets", label: "Tickets", splat: "project/ticket", icon: ClipboardList },
   { id: "roles", label: "Role management", splat: "admin/role", icon: UsersRound },
-  { id: "payment", label: "Payment", splat: "admin/payment", icon: CreditCard },
 ];
 
-export function ProjectSideNav({
-  activeSection,
-  onCreateTicket,
-  canViewDashboard,
-  canViewTickets,
-  canViewRoles,
-  canViewPayment,
-  canCreateTickets,
-}) {
+export function ProjectSideNav({ activeSection, canViewDashboard, canViewTickets, canViewRoles }) {
   const visibilityById = {
     dashboard: canViewDashboard,
     tickets: canViewTickets,
     roles: canViewRoles,
-    // payment: canViewPayment,
   };
   const visibleItems = items.filter(({ id }) => visibilityById[id]);
 
@@ -53,8 +43,7 @@ export function ProjectSideNav({
           </Button>
         ))}
       </nav>
-              <div className="mt-4 border-t border-sidebar-border pt-4">
-</div>
+      <div className="mt-4 border-t border-sidebar-border pt-4"></div>
     </aside>
   );
 }

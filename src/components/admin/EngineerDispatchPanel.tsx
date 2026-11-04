@@ -2,10 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Star, X } from "lucide-react";
+import { ArrowLeft, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/usePermission";
 import {
   allEngineersQuery,
   engineerWorkloadQuery,
@@ -15,49 +16,63 @@ import {
   type EngineerProfileUpdate,
 } from "@/services/engineerService";
 
-const badge: Record<Engineer["approval_status"], string> = {
-  pending: "border-warning/30 bg-warning/10 text-warning",
-  approved: "border-success/30 bg-success/10 text-success",
-  rejected: "border-destructive/30 bg-destructive/10 text-destructive",
-  suspended: "border-border bg-muted text-muted-foreground",
-};
-
-type EngineerEditDraft = Omit<EngineerProfileUpdate, "mode" | "available" | "max_active_jobs">;
+type EditableEngineerField = "full_name" | "phone" | "grade" | "city";
 
 function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
   const { isStaff, ready, roles } = useAuth();
+  const permissions = usePermissions();
   const qc = useQueryClient();
   const [gradeFilter, setGradeFilter] = useState<"All" | "L1" | "L2">("All");
-  const [editingEngineerId, setEditingEngineerId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<EngineerEditDraft | null>(null);
+  const [hoverEditor, setHoverEditor] = useState<{
+    id: string;
+    field: EditableEngineerField;
+    value: string;
+  } | null>(null);
   const isSuperAdmin = roles.includes("super_admin");
-  const engineers = useQuery({ ...allEngineersQuery, enabled: isStaff });
-  const workload = useQuery(engineerWorkloadQuery(isStaff));
+  const canManageDispatch = isStaff || permissions.can("users.engineer_dispatch");
+  const engineers = useQuery({ ...allEngineersQuery, enabled: canManageDispatch });
+  const workload = useQuery(engineerWorkloadQuery(canManageDispatch));
   useEngineerRealtime("ops");
 
-  const avail = useMutation({
-    mutationFn: (a: { id: string; v: boolean }) => engineerService.setAvailable(a.id, a.v),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["engineers"] }),
-    onError: (error: Error) => {
-      console.error("Could not update engineer availability.", error);
-      toast.error(error.message || "Could not update availability.");
-    },
-  });
   const saveProfile = useMutation({
-    mutationFn: (input: { id: string; profile: EngineerEditDraft }) =>
-      engineerService.updateProfile(input.id, input.profile),
-    onSuccess: async () => {
+    mutationFn: (input: {
+      id: string;
+      field: EditableEngineerField;
+      profile: Partial<Pick<EngineerProfileUpdate, EditableEngineerField>>;
+    }) => engineerService.updateProfile(input.id, input.profile),
+    onSuccess: async (_data, input) => {
       await qc.invalidateQueries({ queryKey: ["engineers"] });
-      setEditingEngineerId(null);
-      setEditDraft(null);
-      toast.success("Engineer details saved");
+      setHoverEditor((current) =>
+        current?.id === input.id && current.field === input.field ? null : current,
+      );
+      toast.success("Engineer details updated");
     },
     onError: (error: Error) => {
       console.error("Could not save engineer details.", error);
       toast.error(error.message || "Could not save engineer details.");
     },
   });
-  if (ready && roles.length > 0 && !isStaff)
+  const updateAccess = useMutation({
+    mutationFn: (input: { id: string; profile: Partial<Pick<EngineerProfileUpdate, "status">> }) =>
+      engineerService.updateProfile(input.id, input.profile),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["engineers"] }),
+        qc.invalidateQueries({ queryKey: ["engineer"] }),
+      ]);
+      toast.success("Engineer access updated.");
+    },
+    onError: (error: Error) => {
+      console.error("Could not update engineer status.", error);
+      toast.error(error.message || "Could not update engineer access.");
+    },
+  });
+  if (permissions.isLoading)
+    return (
+      <p className="p-6 text-center text-sm text-muted-foreground">Checking dispatch access…</p>
+    );
+
+  if (ready && !canManageDispatch)
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
         <div>
@@ -73,33 +88,83 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
     (engineer) => !isSuperAdmin || gradeFilter === "All" || engineer.grade === gradeFilter,
   );
   const fieldClass =
-    "h-9 w-full min-w-28 rounded-md border border-input bg-background px-2 text-sm text-foreground";
-  const beginEditing = (engineer: Engineer) => {
-    setEditingEngineerId(engineer.id);
-    setEditDraft({
-      full_name: engineer.full_name,
-      phone: engineer.phone,
-      grade: engineer.grade,
-      city: engineer.city,
-      kit: engineer.kit,
-      approval_status: engineer.approval_status,
-      status: engineer.status,
+    "h-9 w-full min-w-28 rounded-md border border-primary/50 bg-background px-2 text-sm text-foreground shadow-sm outline-none ring-2 ring-primary/15";
+  const startEditing = (engineer: Engineer, field: EditableEngineerField) => {
+    const rawValue = engineer[field];
+    setHoverEditor({
+      id: engineer.id,
+      field,
+      value: rawValue == null ? "" : String(rawValue),
     });
   };
-  const saveEngineer = (id: string) => {
-    if (!editDraft) return;
-    const profile = {
-      ...editDraft,
-      full_name: editDraft.full_name.trim(),
-      phone: editDraft.phone?.trim() || null,
-      city: editDraft.city.trim(),
-      kit: editDraft.kit?.trim() || null,
-    };
-    if (!profile.full_name || !profile.city) {
-      toast.error("Engineer name and city are required.");
+  const saveEngineerField = (id: string, field: EditableEngineerField, value: string) => {
+    const normalizedValue = value.trim();
+    if ((field === "full_name" || field === "city") && !normalizedValue) {
+      toast.error(field === "city" ? "Engineer city is required." : "Engineer name is required.");
       return;
     }
-    saveProfile.mutate({ id, profile });
+    const engineer = list.find((item) => item.id === id);
+    const currentValue = engineer?.[field] ?? "";
+    if (String(currentValue) === normalizedValue) {
+      setHoverEditor(null);
+      return;
+    }
+    const profile: Partial<Pick<EngineerProfileUpdate, EditableEngineerField>> =
+      field === "phone"
+        ? { phone: normalizedValue || null }
+        : field === "grade"
+          ? { grade: normalizedValue }
+          : field === "full_name"
+            ? { full_name: normalizedValue }
+            : { city: normalizedValue };
+    saveProfile.mutate({ id, field, profile });
+  };
+  const renderEditableField = (
+    engineer: Engineer,
+    field: EditableEngineerField,
+    displayValue: string,
+  ) => {
+    const isEditing = hoverEditor?.id === engineer.id && hoverEditor.field === field;
+    if (!isEditing) {
+      return (
+        <div
+          className="min-h-9 rounded-md px-2 py-2 -mx-2 transition-colors hover:bg-muted/60"
+          onMouseEnter={() => startEditing(engineer, field)}
+        >
+          {displayValue || "—"}
+        </div>
+      );
+    }
+
+    const commonProps = {
+      autoFocus: true,
+      disabled: saveProfile.isPending,
+      value: hoverEditor.value,
+      onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+        setHoverEditor({ id: engineer.id, field, value: event.target.value }),
+      onBlur: (event: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) =>
+        saveEngineerField(engineer.id, field, event.currentTarget.value),
+      onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          setHoverEditor(null);
+        }
+      },
+      className: fieldClass,
+      "aria-label": `Engineer ${field.replace("_", " ")}`,
+    };
+
+    return field === "grade" ? (
+      <select {...commonProps}>
+        <option value="L1">L1</option>
+        <option value="L2">L2</option>
+      </select>
+    ) : (
+      <input {...commonProps} />
+    );
   };
   return (
     <div className={embedded ? "space-y-6" : "min-h-screen bg-background px-4 py-8"}>
@@ -149,27 +214,25 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
               <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3">Engineer</th>
+                  <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Level</th>
                   <th className="px-4 py-3">City</th>
-                  <th className="px-4 py-3">Kit</th>
                   <th className="px-4 py-3">Rating</th>
-                  <th className="px-4 py-3">Available</th>
-                  <th className="px-4 py-3">Approval</th>
+                  <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Tickets working on</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {engineers.isLoading && (
                   <tr>
-                    <td colSpan={9} className="p-6">
+                    <td colSpan={7} className="p-6">
                       <div className="h-6 animate-pulse rounded bg-surface" />
                     </td>
                   </tr>
                 )}
                 {(engineers.isError || workload.isError) && (
                   <tr>
-                    <td colSpan={9} className="p-6 text-center text-destructive">
+                    <td colSpan={7} className="p-6 text-center text-destructive">
                       {engineers.isError && (
                         <>
                           Could not load engineers.{" "}
@@ -192,7 +255,7 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
                 )}
                 {!engineers.isLoading && !engineers.isError && list.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
                       {gradeFilter === "All"
                         ? "No engineers have registered yet."
                         : `No ${gradeFilter} engineers found.`}
@@ -200,95 +263,18 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
                   </tr>
                 )}
                 {list.map((engineer) => (
-                  <tr
-                    key={engineer.id}
-                    className="hover:bg-muted/20"
-                    onDoubleClick={(event) => {
-                      const target = event.target;
-                      if (
-                        target instanceof HTMLElement &&
-                        target.closest("button, input, select, [role='switch'], [data-no-row-edit]")
-                      ) {
-                        return;
-                      }
-                      if (editingEngineerId === null) beginEditing(engineer);
-                    }}
-                  >
-                    <td className="px-4 py-3">
-                      {editingEngineerId === engineer.id && editDraft ? (
-                        <div className="space-y-2">
-                          <input
-                            className={fieldClass}
-                            aria-label="Engineer name"
-                            value={editDraft.full_name}
-                            onChange={(event) =>
-                              setEditDraft({ ...editDraft, full_name: event.target.value })
-                            }
-                          />
-                          <input
-                            className={fieldClass}
-                            aria-label="Engineer phone"
-                            value={editDraft.phone ?? ""}
-                            onChange={(event) =>
-                              setEditDraft({ ...editDraft, phone: event.target.value })
-                            }
-                          />
-                        </div>
-                      ) : (
-                        <>
-                          <p className="font-medium">{engineer.full_name}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {engineer.phone || "No phone provided"}
-                          </p>
-                        </>
-                      )}
+                  <tr key={engineer.id} className="hover:bg-muted/20">
+                    <td className="px-4 py-3 font-medium">
+                      {renderEditableField(engineer, "full_name", engineer.full_name)}
                     </td>
                     <td className="px-4 py-3">
-                      {editingEngineerId === engineer.id && editDraft ? (
-                        <select
-                          className={fieldClass}
-                          aria-label="Engineer level"
-                          value={editDraft.grade}
-                          onChange={(event) =>
-                            setEditDraft({ ...editDraft, grade: event.target.value })
-                          }
-                        >
-                          <option value="L1">L1</option>
-                          <option value="L2">L2</option>
-                        </select>
-                      ) : (
-                        <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
-                          {engineer.grade}
-                        </span>
-                      )}
+                      {renderEditableField(engineer, "phone", engineer.phone || "")}
                     </td>
                     <td className="px-4 py-3">
-                      {editingEngineerId === engineer.id && editDraft ? (
-                        <input
-                          className={fieldClass}
-                          aria-label="Engineer city"
-                          value={editDraft.city}
-                          onChange={(event) =>
-                            setEditDraft({ ...editDraft, city: event.target.value })
-                          }
-                        />
-                      ) : (
-                        engineer.city
-                      )}
+                      {renderEditableField(engineer, "grade", engineer.grade)}
                     </td>
-                    <td className="px-4 py-3 text-xs">
-                      {editingEngineerId === engineer.id && editDraft ? (
-                        <input
-                          className={fieldClass}
-                          aria-label="Engineer kit"
-                          value={editDraft.kit ?? ""}
-                          onChange={(event) =>
-                            setEditDraft({ ...editDraft, kit: event.target.value })
-                          }
-                        />
-                      ) : (
-                        engineer.kit || "—"
-                      )}
+                    <td className="px-4 py-3">
+                      {renderEditableField(engineer, "city", engineer.city)}
                     </td>
                     <td className="px-4 py-3" data-no-row-edit>
                       <span className="flex items-center gap-1">
@@ -297,56 +283,22 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
                       </span>
                     </td>
                     <td className="px-4 py-3" data-no-row-edit>
-                      <Switch
-                        checked={engineer.available}
-                        disabled={avail.isPending}
-                        onCheckedChange={(value) => avail.mutate({ id: engineer.id, v: value })}
-                        aria-label={`${engineer.full_name} available`}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      {editingEngineerId === engineer.id && editDraft ? (
-                        <div className="space-y-2">
-                          <select
-                            className={fieldClass}
-                            aria-label="Engineer approval"
-                            value={editDraft.approval_status}
-                            onChange={(event) =>
-                              setEditDraft({
-                                ...editDraft,
-                                approval_status: event.target.value as Engineer["approval_status"],
-                              })
-                            }
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                            <option value="rejected">Rejected</option>
-                            <option value="suspended">Suspended</option>
-                          </select>
-                          <select
-                            className={fieldClass}
-                            aria-label="Engineer account status"
-                            value={editDraft.status}
-                            onChange={(event) =>
-                              setEditDraft({ ...editDraft, status: event.target.value })
-                            }
-                          >
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                          </select>
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-xs capitalize ${badge[engineer.approval_status]}`}
-                          >
-                            {engineer.approval_status}
-                          </span>
-                          <p className="text-xs capitalize text-muted-foreground">
-                            {engineer.status}
-                          </p>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={engineer.status === "active"}
+                          disabled={!isSuperAdmin || updateAccess.isPending}
+                          onCheckedChange={(active) =>
+                            updateAccess.mutate({
+                              id: engineer.id,
+                              profile: { status: active ? "active" : "inactive" },
+                            })
+                          }
+                          aria-label={`${engineer.full_name} account active`}
+                        />
+                        <span className="text-xs capitalize text-muted-foreground">
+                          {engineer.status}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       {workload.isLoading
@@ -354,35 +306,6 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
                         : workload.isError
                           ? "—"
                           : (workload.data?.[engineer.id] ?? 0)}
-                    </td>
-                    <td className="space-x-2 whitespace-nowrap px-4 py-3 text-right">
-                      {editingEngineerId === engineer.id ? (
-                        <>
-                          <Button
-                            size="sm"
-                            disabled={saveProfile.isPending}
-                            onClick={() => saveEngineer(engineer.id)}
-                          >
-                            {saveProfile.isPending ? "Saving…" : "Save"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={saveProfile.isPending}
-                            onClick={() => {
-                              setEditingEngineerId(null);
-                              setEditDraft(null);
-                            }}
-                          >
-                            <X />
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          Double-click row to edit
-                        </span>
-                      )}
                     </td>
                   </tr>
                 ))}

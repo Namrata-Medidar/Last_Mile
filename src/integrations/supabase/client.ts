@@ -71,8 +71,8 @@ function createSupabaseClient() {
     //   autoRefreshToken: true,
     // },
       auth: {
-      persistSession: false,
-      autoRefreshToken: false,
+      persistSession: true,
+      autoRefreshToken: true,
       detectSessionInUrl: true,
     },
       });

@@ -49,8 +49,8 @@ function createSupabaseAdminClient() {
     },
     auth: {
       storage: undefined,
-      persistSession: false,
-      autoRefreshToken: false,
+      persistSession: true,
+      autoRefreshToken: true,
     }
   });
 }

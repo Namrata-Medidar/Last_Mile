@@ -6,10 +6,11 @@ describe("summarise", () => {
     const s = summarise([
       { status: "Closed", total: 5000, service_slug: "a", created_at: "", priority: "P2" },
       { status: "Open", total: 9000, service_slug: "a", created_at: "", priority: "P2" },
+      { status: "Assigned", total: 4000, service_slug: "a", created_at: "", priority: "P2" },
       { status: "Cancelled", total: 1000, service_slug: "a", created_at: "", priority: "P2" },
     ]);
     expect(s.revenue).toBe(5000);
-    expect(s.total).toBe(3);
-    expect(s.open).toBe(1);
+    expect(s.total).toBe(4);
+    expect(s.open).toBe(2);
   });
 });

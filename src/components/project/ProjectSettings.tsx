@@ -4,7 +4,7 @@ import { RolesTable } from "@/components/roles/RolesTable";
 import { Button } from "@/components/ui/button";
 import { UserRoleAssignment } from "@/components/roles/UserRoleAssignment";
 import { usePermissions } from "@/hooks/usePermission";
-type SettingsSection = "roles" | "permissions" | "assignments" | "payment";
+type SettingsSection = "roles" | "permissions" | "assignments";
 
 type ProjectSettingsProps = {
   section?: SettingsSection;
@@ -36,9 +36,7 @@ export function ProjectSettings({ section = "roles", onNotify }: ProjectSettings
     error: permissionError,
     refetch: refetchPermissions,
   } = usePermissions();
-  const canViewRoles =
-    permissionCodes.includes("roles.tab_view") ||
-    permissionCodes.includes("sidebar.project_team.role_management.view");
+  const canViewRoles = permissionCodes.includes("roles.tab_view");
   const [activeSection, setActiveSection] = useState<SettingsSection>(section);
   const visibleSections = useMemo(
     () =>
@@ -110,8 +108,19 @@ export function ProjectSettings({ section = "roles", onNotify }: ProjectSettings
       {/* Selected section */}
       <section className="rounded-lg border border-border bg-background">
         <div className="p-6">
-          {activeSectionIsVisible && activeSection === "roles" && <RolesTable />}
-          {activeSectionIsVisible && activeSection === "assignments" && <UserRoleAssignment />}
+          {!permissionsLoading && visibleSections.length === 0 ? (
+            <div className="py-8 text-center">
+              <h2 className="text-base font-semibold">Access not granted</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Ask your administrator to grant Role Management or User Management access.
+              </p>
+            </div>
+          ) : (
+            <>
+              {activeSectionIsVisible && activeSection === "roles" && <RolesTable />}
+              {activeSectionIsVisible && activeSection === "assignments" && <UserRoleAssignment />}
+            </>
+          )}
         </div>
       </section>
     </div>

@@ -2,6 +2,7 @@ import { Activity, CheckCircle2, Clock3 } from "lucide-react";
 
 export const statuses = [
   { label: "Open", icon: Clock3, style: "border-warning/20 bg-warning/10 text-warning" },
+  { label: "Assigned", icon: Clock3, style: "border-warning/20 bg-warning/10 text-warning" },
   { label: "In Progress", icon: Activity, style: "border-primary/20 bg-primary/10 text-primary" },
   { label: "Closed", icon: CheckCircle2, style: "border-success/20 bg-success/10 text-success" },
 ];

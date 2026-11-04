@@ -9,7 +9,7 @@ export type Ticket = {
   customerId: string;
   id: string;
   title: string;
-  status: "Open" | "In Progress" | "Closed" | "Cancelled";
+  status: "Open" | "Assigned" | "In Progress" | "Closed" | "Cancelled";
   priority: string;
   engineerId: string | null;
   engineer: string;
@@ -245,20 +245,6 @@ export const bookingService = {
       throw error;
     }
     return toTicket(data);
-  },
-  async createSample(
-    customerId: string,
-    sample: { title: string; priority: string; city: string; customer: string },
-  ): Promise<void> {
-    const { error } = await supabase.from("bookings").insert({
-      customer_id: customerId,
-      title: sample.title,
-      priority: sample.priority,
-      city: sample.city,
-      customer_name: sample.customer,
-      details: { createdVia: "staff_sample" },
-    });
-    if (error) throw error;
   },
   async update(dbId: string, u: TicketUpdate): Promise<void> {
     const patch: TablesUpdate<"bookings"> = {};
