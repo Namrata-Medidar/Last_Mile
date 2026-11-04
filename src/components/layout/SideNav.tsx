@@ -27,6 +27,7 @@ function SideNav({
   canViewFieldEngineer = false,
   canViewUpcomingFeatures = false,
   canViewCustomerPortal = false,
+  canViewMyOrders = false,
 }: {
   activeService?: string;
   onServiceSelect?: (service: string) => void;
@@ -37,9 +38,11 @@ function SideNav({
   canViewFieldEngineer?: boolean;
   canViewUpcomingFeatures?: boolean;
   canViewCustomerPortal?: boolean;
+  canViewMyOrders?: boolean;
 }) {
   const canAccessWorkspace = canViewCustomerPortal || canUseTeam;
-  const hasSidebarContent = canAccessWorkspace || canViewFieldEngineer || canViewUpcomingFeatures;
+  const hasSidebarContent =
+    canAccessWorkspace || canViewFieldEngineer || canViewUpcomingFeatures || canViewMyOrders;
 
   if (!hasSidebarContent) return null;
 
@@ -150,8 +153,7 @@ function SideNav({
           </div>
         </div>
       )}
-      {/* My Orders — customers only */}
-      {role === "customer" && canViewCustomerPortal && (
+      {canViewMyOrders && (
         <div className="mt-auto border-t border-sidebar-border pt-3">
           <Button
             type="button"

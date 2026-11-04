@@ -11,6 +11,7 @@ type ManagePermissionsProps = {
 };
 
 const VISIBLE_SIDEBAR_PERMISSION_CODES = new Set([
+  "sidebar.my_orders.view",
   "sidebar.upcoming_features.view",
   "sidebar.field_engineer.view",
   "sidebar.project_team.dashboard.view",
@@ -19,6 +20,7 @@ const VISIBLE_SIDEBAR_PERMISSION_CODES = new Set([
 ]);
 
 const PERMISSION_DISPLAY_NAMES: Record<string, string> = {
+  "sidebar.my_orders.view": "My Orders",
   "sidebar.upcoming_features.view": "Upcoming Features",
   "sidebar.field_engineer.view": "Field Engineer Support",
   "sidebar.project_team.dashboard.view": "Project Team - Dashboard",

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { queryOptions } from "@tanstack/react-query";
 import type { AppRole } from "./authService";
 
 export type Profile = {
@@ -46,7 +47,7 @@ export const userService = {
     const ids = [
       ...new Set((assignments ?? []).flatMap((row) => (row.role_id ? [row.role_id] : []))),
     ];
-    if (!ids.length) throw new Error("No active role is assigned to your account.");
+    if (!ids.length) return [];
     const { data: roles, error: roleError } = await supabase
       .from("roles")
       .select("name")
@@ -54,7 +55,13 @@ export const userService = {
       .eq("is_active", true)
       .order("name");
     if (roleError) throw roleError;
-    if (!roles?.length) throw new Error("No active role is assigned to your account.");
-    return [...new Set(roles.map((role) => role.name))];
+    return [...new Set((roles ?? []).map((role) => role.name))];
   },
 };
+
+export const userRoleNamesQuery = (userId: string | null) =>
+  queryOptions({
+    queryKey: ["user-role-names", userId],
+    enabled: Boolean(userId),
+    queryFn: () => userService.getRoleNames(userId!),
+  });

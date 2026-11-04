@@ -18,6 +18,7 @@ function AppShell({
   canViewFieldEngineer,
   canViewUpcomingFeatures,
   canViewCustomerPortal,
+  canViewMyOrders,
   notifications,
   canUseTeam,
   onNotificationsOpen,
@@ -52,6 +53,7 @@ function AppShell({
               canViewFieldEngineer,
               canViewUpcomingFeatures,
               canViewCustomerPortal,
+              canViewMyOrders,
             }),
           role === "team" &&
             /* @__PURE__ */ jsx(ProjectSideNav, {
