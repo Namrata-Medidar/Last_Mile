@@ -1,4 +1,9 @@
 import { Activity, CheckCircle2, Clock3 } from "lucide-react";
+import {
+  ticketPriorities,
+  ticketPriorityNames,
+  ticketPriorityRank,
+} from "@/lib/ticketPriority";
 
 export const statuses = [
   { label: "Open", icon: Clock3, style: "border-warning/20 bg-warning/10 text-warning" },
@@ -7,8 +12,9 @@ export const statuses = [
 ];
 
 export const orderStages = ["Pending", "Assigned", "In progress", "Completed"];
-export const priorities = ["Urgent", "High", "Medium", "Low"];
-export const priorityRank = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
+export const priorities = ticketPriorities;
+export const priorityNames = ticketPriorityNames;
+export const priorityRank = ticketPriorityRank;
 
 export function getCancellationErrorMessage(error: unknown): string {
   if (error && typeof error === "object" && "message" in error) {

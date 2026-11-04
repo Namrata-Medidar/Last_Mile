@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { queryOptions, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeTicketPriority } from "@/lib/ticketPriority";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 
 /** Shape the existing order screens already use. */
@@ -110,7 +111,7 @@ const toTicket = (r: Row): Ticket => {
     id: r.ticket_no,
     title: r.title,
     status: r.status as Ticket["status"],
-    priority: r.priority,
+    priority: normalizeTicketPriority(r.priority),
     engineerId: r.engineer_id,
     engineer: r.engineer_name,
     assigneePhone: r.engineer_phone ?? "",

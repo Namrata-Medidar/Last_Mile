@@ -6,6 +6,30 @@ const BUCKET = "booking-attachments";
 export type BookingAttachment = Tables<"booking_attachments">;
 
 export const attachmentService = {
+  async countByBookingIds(bookingIds: string[]): Promise<Record<string, number>> {
+    const ids = [...new Set(bookingIds)];
+    const counts: Record<string, number> = {};
+    if (!ids.length) return counts;
+
+    const pageSize = 1000;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from("booking_attachments")
+        .select("booking_id")
+        .in("booking_id", ids)
+        .order("booking_id")
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+
+      for (const attachment of data ?? []) {
+        counts[attachment.booking_id] = (counts[attachment.booking_id] ?? 0) + 1;
+      }
+      if (!data || data.length < pageSize) break;
+    }
+
+    return counts;
+  },
+
   async list(bookingId: string): Promise<BookingAttachment[]> {
     const { data, error } = await supabase
       .from("booking_attachments")
