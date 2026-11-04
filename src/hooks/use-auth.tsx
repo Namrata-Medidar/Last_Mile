@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveSessionUser } from "@/integrations/supabase/authStorage";
 import { authService, isStaff, type AppRole } from "@/services/authService";
 import { userService, type Profile } from "@/services/userService";
 
@@ -25,16 +26,47 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let active = true;
     let authEventReceived = false;
+    let revision = 0;
+    let currentUserId: string | null = null;
+    const pending = new Set<ReturnType<typeof setTimeout>>();
+    const commitSession = (restored: Session | null) => {
+      const nextUserId = restored?.user.id ?? null;
+      if (nextUserId !== currentUserId) {
+        void queryClient.cancelQueries();
+        queryClient.clear();
+        currentUserId = nextUserId;
+      }
+      setSession(restored);
+      setReady(true);
+    };
+    const receiveSession = (next: Session | null) => {
+      if (!active) return;
+      const currentRevision = ++revision;
+      if (!next) {
+        commitSession(null);
+        return;
+      }
+      setReady(false);
+      const timeout = setTimeout(() => {
+        pending.delete(timeout);
+        if (!active || revision !== currentRevision) return;
+        void resolveSessionUser(next, (token) => supabase.auth.getUser(token)).then((restored) => {
+          if (!active || revision !== currentRevision) return;
+          commitSession(restored);
+        });
+      }, 0);
+      pending.add(timeout);
+    };
     const { data } = supabase.auth.onAuthStateChange((_event, next) => {
       authEventReceived = true;
-      setSession(next);
-      setReady(true);
+      receiveSession(next);
     });
 
     void supabase.auth
@@ -43,20 +75,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         if (error)
           console.error("Could not restore the Supabase auth session:", error);
-        if (!authEventReceived) setSession(result.session);
-        setReady(true);
+        if (!authEventReceived) receiveSession(error ? null : result.session);
       })
       .catch((error: unknown) => {
         if (!active) return;
         console.error("Could not restore the Supabase auth session:", error);
-        setReady(true);
+        if (!authEventReceived) receiveSession(null);
       });
 
     return () => {
       active = false;
+      pending.forEach(clearTimeout);
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [queryClient]);
 
   const userId = session?.user.id ?? null;
 

@@ -52,9 +52,29 @@ create policy "Add attachments to visible bookings"
     )
   );
 
-insert into storage.buckets (id, name, public)
-values ('booking-attachments', 'booking-attachments', false)
-on conflict (id) do update set public = false;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'booking-attachments',
+  'booking-attachments',
+  false,
+  10485760,
+  array[
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'text/plain',
+    'text/csv',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ]
+)
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "Read files for visible bookings" on storage.objects;
 create policy "Read files for visible bookings"

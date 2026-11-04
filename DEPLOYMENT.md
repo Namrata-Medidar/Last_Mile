@@ -88,6 +88,22 @@ Keep `.env.production` mode `600` and restricted to VM administrators. Compose p
 - Replace placeholder company details on the invoice page (GSTIN, address) once provided.
 - After applying the account-approval migration, new registrations remain pending until a Super Admin approves them. Existing active accounts are not changed.
 
+### Restricted UAT Handoff (2026-11-03)
+
+- Keep framework versions unchanged as requested. The current Vite and Zod versions have high-severity advisories; this build is for restricted UAT with synthetic data, not public production approval. Do not expose Vite's development port to the internet.
+- The existing Nginx access restriction is currently commented out. Configure the active TLS `location /` with the approved UAT IP/VPN allowlist and a final `deny all;` before opening UAT. Verify the intended Super Admin exists first; do not rely on public first-signup bootstrap.
+- Rebuild the app to deploy auth/redirect/cache changes. The existing session storage migrates on access; personal claims already inside JWTs are not removed. Supabase Auth and RLS remain the security boundaries.
+- Apply the updated bucket upsert in `drizzle/migrations/0008_booking_attachments.sql` to the existing `booking-attachments` bucket: private, maximum 10 MB, and the listed PDF/image/text/Office MIME types. The script is rerunnable, but its policy statements replace named policies; use the bucket upsert alone if deployed policies must be preserved. Client validation alone cannot stop direct API uploads, and MIME restrictions do not provide malware scanning.
+- Validate the changed Nginx config on the deployment host before restarting/reloading it:
+
+  ```sh
+  docker compose --env-file .env.production run --rm --no-deps --entrypoint nginx nginx -t
+  ```
+
+- Configure Supabase Auth's existing password policy, rate limits, token expiry/refresh controls, and approved UAT redirect origins in the hosted dashboard. Editing local files does not update the hosted project.
+- Run the cross-account/API test matrix in `SECURITY-REVIEW.md` before UAT approval. Tests must exercise database policies with ordinary user tokens, not a service-role key. Keep real customer data and financial transactions out of this build while client-authoritative pricing remains.
+- Local verification: 79 automated tests and the deployment build pass; anonymous admin access redirects to sign-in in the browser. Full repository typechecking still reports routing/database-type mismatches. Hosted RLS, bucket limits, Nginx configuration, and authenticated multi-role workflows have not been verified against UAT.
+
 ## 2. Publish
 
 - Click **Publish** in the editor. The app and backend go live together.
