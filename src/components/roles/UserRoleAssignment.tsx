@@ -242,6 +242,7 @@ export function UserRoleAssignment() {
       setSelectedRoleIds([]);
       setRoleDialogOpen(false);
       setNotice("User roles updated successfully.");
+      await queryClient.invalidateQueries({ queryKey: ["user-role-names"] });
       await queryClient.invalidateQueries({
         queryKey: ["user-role-assignments"],
       });

@@ -144,6 +144,12 @@ Keep `.env.production` mode `600` and restricted to VM administrators. Compose p
 
 ## 4. Security notes
 
+Run `drizzle/migrations/0045_role_based_ticket_visibility.sql` after `0044` to align ticket reads with roles: Super Admin sees all, Engineers see assigned tickets only, Customers see tickets they created only, and other roles with Project Tickets, Project Dashboard, or Engineers & dispatch access see all. For multiple roles, Super Admin takes precedence, then Engineer, then Customer. Comments and ticket events follow the same ticket scope; customers cannot read internal notes. Both permissive and restrictive read policies are updated so custom roles are no longer blocked by the system-staff check. Verify these account types against the database after applying the migration; it is not applied automatically.
+
+Run `drizzle/migrations/0044_registration_without_default_role.sql` after `0043` to stop assigning Customer automatically at signup. Accounts remain pending until approved. Approved accounts without a role can browse the service list; their account menu and profile show "No role assigned" until an administrator assigns a role. Role-controlled navigation remains permission-based. The initial Super Admin bootstrap is preserved. Signup-created pending Customer assignments are removed for accounts still pending; existing approved accounts and administrator-assigned roles are unchanged.
+
+Run `drizzle/migrations/0043_my_orders_sidebar_permission.sql` after `0042` to control the My Orders navigation button through Manage Permissions → Sidebar → My Orders (`sidebar.my_orders.view`). Existing Customer roles retain the button by default; grant it to other roles as needed. This permission controls navigation visibility, not ticket data access; existing booking access policies remain unchanged.
+
 - Roles are stored separately and checked on the server; every table has row-level access rules.
 - Engineer assignment, job progress, ratings, role changes and payments run only through server-side database functions.
 - Internal database helpers are not callable from the app; public visitors can only read the active catalogue and prices.

@@ -195,7 +195,7 @@ export function MyBookings({
                 <p className="text-sm font-semibold">No orders yet</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {isTeam
-                    ? "Tickets created by customers will appear here."
+                    ? "No tickets are available for your account. Engineers see only tickets assigned to them; customers see only tickets they created."
                     : "Book a service from the marketplace to see it here."}
                 </p>
                 <Button className="mt-4" variant="outline" onClick={onBack}>
@@ -382,11 +382,7 @@ export function MyBookings({
             onSelectTicket={selectTicket}
           />
           <div
-            className={
-              isTeam
-                ? "min-h-0 min-w-0 space-y-4 overflow-y-auto"
-                : "min-w-0 space-y-4"
-            }
+            className={isTeam ? "min-h-0 min-w-0 space-y-4 overflow-y-auto" : "min-w-0 space-y-4"}
           >
             {commentsError && (
               <p
@@ -442,9 +438,7 @@ export function MyBookings({
               attachmentActionError={attachmentActionError}
               attachmentsLoading={attachmentsQuery.isLoading}
               attachmentsError={
-                attachmentsQuery.error instanceof Error
-                  ? attachmentsQuery.error.message
-                  : undefined
+                attachmentsQuery.error instanceof Error ? attachmentsQuery.error.message : undefined
               }
               downloadingAttachmentId={downloadingAttachmentId}
               onAddFiles={addFiles}

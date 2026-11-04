@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutDashboard, LogOut, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/usePermission";
-import { authService, ROLE_LABELS } from "@/services/authService";
+import { authService } from "@/services/authService";
+import { userRoleNamesQuery } from "@/services/userService";
 
 function initials(name: string): string {
   return (
@@ -27,7 +28,8 @@ function initials(name: string): string {
 }
 
 export function AccountMenu() {
-  const { ready, userId, profile, email, roles } = useAuth();
+  const { ready, userId, profile, email } = useAuth();
+  const roleNames = useQuery(userRoleNamesQuery(userId));
   const permissions = usePermissions();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -41,7 +43,11 @@ export function AccountMenu() {
     );
 
   const name = profile?.full_name || email || "User";
-  const topRole = roles.find((r) => r !== "customer") ?? "customer";
+  const roleLabel = roleNames.isLoading
+    ? "Loading roles..."
+    : roleNames.isError
+      ? "Could not load roles"
+      : roleNames.data?.join(" · ") || "No role assigned";
 
   const signOut = async () => {
     try {
@@ -66,7 +72,7 @@ export function AccountMenu() {
         <span className="hidden text-right sm:block">
           <span className="block text-xs font-semibold leading-tight">{name}</span>
           <span className="block text-[10px] leading-tight text-muted-foreground">
-            {profile?.company || ROLE_LABELS[topRole]}
+            {profile?.company || roleLabel}
           </span>
         </span>
         <span className="grid h-8 w-8 place-items-center rounded-full bg-surface text-xs font-semibold">
@@ -76,9 +82,12 @@ export function AccountMenu() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="text-xs">
           {email}
-          <span className="mt-1 block font-normal text-muted-foreground">
-            {roles.map((r) => ROLE_LABELS[r]).join(" · ")}
-          </span>
+          <span className="mt-1 block font-normal text-muted-foreground">{roleLabel}</span>
+          {roleNames.isError && (
+            <button className="text-xs underline" onClick={() => void roleNames.refetch()}>
+              Retry loading roles
+            </button>
+          )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

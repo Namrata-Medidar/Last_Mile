@@ -358,9 +358,13 @@ export function App({
     const ticket = customerTickets.find((item) => item.id === ticketNo);
     if (!ticket) return;
     try {
+      const roleNames = await userService.getRoleNames(userId!);
+      if (!roleNames.length) {
+        throw new Error("No active role is assigned to your account.");
+      }
       await bookingService.comment(ticket.dbId, visibility, text, {
         name: auth.profile?.full_name || auth.email || "User",
-        role: (await userService.getRoleNames(userId!)).join(", "),
+        role: roleNames.join(", "),
       });
       qc.invalidateQueries({ queryKey: ["booking-comments", userId] });
     } catch (error) {
@@ -550,6 +554,7 @@ export function App({
       canViewFieldEngineer={permissions.can("sidebar.field_engineer.view")}
       canViewUpcomingFeatures={permissions.can("sidebar.upcoming_features.view")}
       canViewCustomerPortal={auth.hasRole("customer")}
+      canViewMyOrders={permissions.can("sidebar.my_orders.view")}
       crumbs={["Home", pageTitles[page]]}
       activeService={activeService}
       onServiceSelect={selectCategory}
