@@ -279,7 +279,8 @@ export const rolePermissionService = {
       .from("user_roles")
       .select("role_id")
       .eq("user_id", userId)
-      .eq("status", "active");
+      .eq("status", "active")
+      .not("role_id", "is", null);
 
     if (error) throw normalizeError(error);
 

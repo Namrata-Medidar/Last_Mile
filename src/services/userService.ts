@@ -42,7 +42,8 @@ export const userService = {
       .from("user_roles")
       .select("role_id")
       .eq("user_id", userId)
-      .eq("status", "active");
+      .eq("status", "active")
+      .not("role_id", "is", null);
     if (error) throw error;
     const ids = [
       ...new Set((assignments ?? []).flatMap((row) => (row.role_id ? [row.role_id] : []))),
