@@ -58,6 +58,7 @@ type BookingFormProps = {
     contacts: PointOfContact[];
     issueDescription: string;
     workInstructions: string;
+    attachments: File[];
   }) => void | Promise<void>;
 };
 
@@ -96,6 +97,7 @@ export function BookingForm({
   const [pocs, setPocs] = useState<PointOfContact[]>([emptyPointOfContact()]);
   const [issueDescription, setIssueDescription] = useState("");
   const [workInstructions, setWorkInstructions] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
   useEffect(() => {
     if (customerType !== "existing") return;
     setSelectedSiteId("");
@@ -129,6 +131,7 @@ export function BookingForm({
     setPocs([emptyPointOfContact()]);
     setIssueDescription("");
     setWorkInstructions("");
+    setAttachments([]);
   };
   const changeCustomerType = (nextType: "existing" | "new") => {
     setCustomerType(nextType);
@@ -506,7 +509,16 @@ export function BookingForm({
           </label>
           <label>
             <span className={label}>Attachments</span>
-            <Input type="file" multiple />
+            <Input
+              type="file"
+              multiple
+              onChange={(event) => setAttachments(Array.from(event.target.files ?? []))}
+            />
+            {attachments.length > 0 && (
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {attachments.length} {attachments.length === 1 ? "file" : "files"} selected
+              </span>
+            )}
           </label>
         </div>
       </section>
@@ -604,6 +616,7 @@ export function BookingForm({
                     contacts: pocs,
                     issueDescription: issueDescription.trim(),
                     workInstructions: workInstructions.trim(),
+                    attachments,
                   });
                 } finally {
                   setSubmitting(false);

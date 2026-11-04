@@ -165,7 +165,8 @@ export function MyBookings({
         })
         .sort(
           (firstTicket, secondTicket) =>
-            priorityRank[firstTicket.priority] - priorityRank[secondTicket.priority],
+            (priorityRank[firstTicket.priority] ?? 4) -
+            (priorityRank[secondTicket.priority] ?? 4),
         ),
     [allTickets, customerFilter, priorityFilter, search, statusFilter],
   );
@@ -233,7 +234,7 @@ export function MyBookings({
           ? 1
           : 0;
   const visitDate =
-    selectedTicket.priority === "Urgent"
+    selectedTicket.priority === "P0"
       ? "Immediate"
       : selectedTicket.visitDate
         ? new Date(`${selectedTicket.visitDate}T00:00:00`).toLocaleDateString("en-IN", {
@@ -243,7 +244,7 @@ export function MyBookings({
           })
         : "Not scheduled";
   const visitTime =
-    selectedTicket.priority === "Urgent"
+    selectedTicket.priority === "P0"
       ? "On dispatch"
       : selectedTicket.visitTime
         ? new Date(`1970-01-01T${selectedTicket.visitTime}:00`).toLocaleTimeString("en-IN", {

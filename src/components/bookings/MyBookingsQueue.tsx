@@ -2,7 +2,7 @@ import { MessageSquare, Search } from "lucide-react";
 
 import { panel } from "@/components/common/ui";
 import type { Ticket } from "@/services/bookingService";
-import { priorities, statuses } from "./myBookingsConstants";
+import { priorities, priorityNames, statuses } from "./myBookingsConstants";
 
 export function MyBookingsQueue({
   isTeam,
@@ -109,11 +109,11 @@ export function MyBookingsQueue({
               {priorities.map((priority) => {
                 const active = priorityFilter === priority;
                 const style =
-                  priority === "Urgent"
+                  priority === "P0"
                     ? "border-destructive/30 bg-destructive/10 text-destructive"
-                    : priority === "High"
+                    : priority === "P1"
                       ? "border-warning/30 bg-warning/10 text-warning"
-                      : priority === "Medium"
+                      : priority === "P2"
                         ? "border-primary/30 bg-primary/10 text-primary"
                         : "border-success/30 bg-success/10 text-success";
                 return (
@@ -123,7 +123,9 @@ export function MyBookingsQueue({
                     onClick={() => setPriorityFilter(active ? "All" : priority)}
                     className={`rounded-md border px-2 py-1.5 text-left text-[10px] font-semibold ${style} ${active ? "ring-1 ring-current" : "hover:bg-surface"}`}
                   >
-                    <span>{priority}</span>
+                    <span>
+                      {priority} · {priorityNames[priority]}
+                    </span>
                     <span className="float-right">{priorityCounts[priority]}</span>
                   </button>
                 );
@@ -152,11 +154,11 @@ export function MyBookingsQueue({
           const ticketUnreadComments =
             ticket.unreadComments && !readTicketIds.includes(ticket.id) ? ticket.unreadComments : 0;
           const priorityStyle =
-            ticket.priority === "Urgent"
+            ticket.priority === "P0"
               ? "bg-destructive/10 text-destructive"
-              : ticket.priority === "High"
+              : ticket.priority === "P1"
                 ? "bg-warning/15 text-warning"
-                : ticket.priority === "Medium"
+                : ticket.priority === "P2"
                   ? "bg-primary/15 text-primary"
                   : "bg-success/15 text-success";
           return (
