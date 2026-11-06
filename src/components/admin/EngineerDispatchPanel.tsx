@@ -129,7 +129,9 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
       return (
         <div
           className="min-h-9 rounded-md px-2 py-2 -mx-2 transition-colors hover:bg-muted/60"
-          onMouseEnter={() => startEditing(engineer, field)}
+          onMouseEnter={() => {
+            if (!hoverEditor && !saveProfile.isPending) startEditing(engineer, field);
+          }}
         >
           {displayValue || "—"}
         </div>
@@ -158,7 +160,17 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
     };
 
     return field === "grade" ? (
-      <select {...commonProps}>
+      <select
+        {...commonProps}
+        onChange={(event) => {
+          const value = event.target.value;
+          setHoverEditor({ id: engineer.id, field, value });
+          saveEngineerField(engineer.id, field, value);
+        }}
+        onBlur={() => {
+          if (!saveProfile.isPending && !saveProfile.isError) setHoverEditor(null);
+        }}
+      >
         <option value="L1">L1</option>
         <option value="L2">L2</option>
       </select>

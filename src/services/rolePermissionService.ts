@@ -29,7 +29,7 @@ export type RolePermission = {
 export type UserRoleAssignment = {
   id: string;
   user_id: string;
-  role_id: string | null;
+  role_id: string; // Changed: role_id is NOW REQUIRED (never null)
   status: string;
   created_at: string;
   updated_at: string;

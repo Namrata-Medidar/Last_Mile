@@ -120,21 +120,7 @@ function SideNav({
             </div>
 
             <div className="mt-2 flex flex-col gap-1 rounded-lg bg-muted/60 p-1">
-              {canViewCustomerPortal && (
-                <button
-                  type="button"
-                  onClick={() => onRoleChange?.("customer")}
-                  className={`flex w-full items-center justify-start gap-2 rounded-md px-3 py-2.5 text-xs font-medium transition-colors ${
-                    role !== "team"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
-                  }`}
-                >
-                  <UserRound className="h-3.5 w-3.5" />
-                  Customer
-                </button>
-              )}
-
+             
               {canUseTeam && (
                 <button
                   type="button"
