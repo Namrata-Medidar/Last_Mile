@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Star } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
@@ -129,7 +129,9 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
       return (
         <div
           className="min-h-9 rounded-md px-2 py-2 -mx-2 transition-colors hover:bg-muted/60"
-          onMouseEnter={() => startEditing(engineer, field)}
+          onMouseEnter={() => {
+            if (!hoverEditor && !saveProfile.isPending) startEditing(engineer, field);
+          }}
         >
           {displayValue || "—"}
         </div>
@@ -158,7 +160,17 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
     };
 
     return field === "grade" ? (
-      <select {...commonProps}>
+      <select
+        {...commonProps}
+        onChange={(event) => {
+          const value = event.target.value;
+          setHoverEditor({ id: engineer.id, field, value });
+          saveEngineerField(engineer.id, field, value);
+        }}
+        onBlur={() => {
+          if (!saveProfile.isPending && !saveProfile.isError) setHoverEditor(null);
+        }}
+      >
         <option value="L1">L1</option>
         <option value="L2">L2</option>
       </select>
@@ -205,7 +217,6 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
               <h2 className="font-semibold">Field engineers</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 {list.length} {gradeFilter === "All" ? "engineers" : `${gradeFilter} engineers`}.
-                Ratings are calculated from completed jobs.
               </p>
             </div>
           </div>
@@ -217,7 +228,6 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Level</th>
                   <th className="px-4 py-3">City</th>
-                  <th className="px-4 py-3">Rating</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Tickets working on</th>
                 </tr>
@@ -225,14 +235,14 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
               <tbody className="divide-y divide-border">
                 {engineers.isLoading && (
                   <tr>
-                    <td colSpan={7} className="p-6">
+                    <td colSpan={6} className="p-6">
                       <div className="h-6 animate-pulse rounded bg-surface" />
                     </td>
                   </tr>
                 )}
                 {(engineers.isError || workload.isError) && (
                   <tr>
-                    <td colSpan={7} className="p-6 text-center text-destructive">
+                    <td colSpan={6} className="p-6 text-center text-destructive">
                       {engineers.isError && (
                         <>
                           Could not load engineers.{" "}
@@ -255,7 +265,7 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
                 )}
                 {!engineers.isLoading && !engineers.isError && list.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
                       {gradeFilter === "All"
                         ? "No engineers have registered yet."
                         : `No ${gradeFilter} engineers found.`}
@@ -275,12 +285,6 @@ function OpsEngineers({ embedded = false }: { embedded?: boolean }) {
                     </td>
                     <td className="px-4 py-3">
                       {renderEditableField(engineer, "city", engineer.city)}
-                    </td>
-                    <td className="px-4 py-3" data-no-row-edit>
-                      <span className="flex items-center gap-1">
-                        <Star className="h-3.5 w-3.5 text-warning" />
-                        {engineer.ratings_count ? Number(engineer.rating).toFixed(1) : "—"}
-                      </span>
                     </td>
                     <td className="px-4 py-3" data-no-row-edit>
                       <div className="flex items-center gap-2">

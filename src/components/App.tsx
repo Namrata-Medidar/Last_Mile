@@ -589,6 +589,17 @@ export function App({
       onNotificationSelect={openNotification}
       showServiceNav={showServiceNav}
     >
+      {userId && permissions.error && (
+        <div
+          role="alert"
+          className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          Navigation permissions could not be loaded: {permissions.error.message}.{" "}
+          <button className="underline" onClick={() => void permissions.refetch()}>
+            Retry
+          </button>
+        </div>
+      )}
       {page === "marketplace" && servicesResult.isError && (
         <div
           role="alert"

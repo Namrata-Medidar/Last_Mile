@@ -36,7 +36,6 @@ import {
   type CancellationPolicy,
 } from "@/services/cancellationPolicyService";
 import { toast } from "sonner";
-import { RateJob } from "./RateJob";
 import { orderStages, getCancellationErrorMessage } from "./myBookingsConstants";
 import { Conversation, OrderMetric, TicketTabs } from "./MyBookingsWidgets";
 
@@ -436,18 +435,26 @@ export function MyBookingDetails({
               <p
                 className={`text-sm font-semibold ${isAssigned ? "text-success" : "text-warning"}`}
               >
-                {ticket.status === "In Progress"
-                  ? "Engineer accepted - work in progress"
-                  : isAssigned
-                    ? "Engineer assigned"
-                    : "Assignment pending"}
+                {ticket.status === "Closed"
+                  ? "Ticket closed"
+                  : ticket.status === "Cancelled"
+                    ? "Ticket cancelled"
+                    : ticket.status === "In Progress"
+                      ? "Engineer accepted - work in progress"
+                      : isAssigned
+                        ? "Engineer assigned"
+                        : "Assignment pending"}
               </p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {ticket.status === "In Progress"
-                  ? `${ticket.engineer} has accepted this ticket and started work.`
-                  : isAssigned
-                    ? `${ticket.engineer} is assigned. Waiting for the engineer to accept this ticket.`
-                    : "The project team has not assigned an engineer yet."}
+                {ticket.status === "Closed"
+                  ? "This ticket has been closed. No further action is required."
+                  : ticket.status === "Cancelled"
+                    ? "This ticket has been cancelled."
+                    : ticket.status === "In Progress"
+                      ? `${ticket.engineer} has accepted this ticket and started work.`
+                      : isAssigned
+                        ? `${ticket.engineer} is assigned. Waiting for the engineer to accept this ticket.`
+                        : "The project team has not assigned an engineer yet."}
               </p>
             </div>
           </div>
@@ -468,9 +475,6 @@ export function MyBookingDetails({
           </div>
         </div>
       </div>
-      {!isTeam && ticket.status === "Closed" && ticket.dbId && (
-        <RateJob dbId={ticket.dbId} rated={ticket.rating} />
-      )}
       {isTeam && canAddAssignee && (
         <div className="grid gap-3 border-b border-border p-4 md:grid-cols-[1fr_1fr_auto]">
           <label>

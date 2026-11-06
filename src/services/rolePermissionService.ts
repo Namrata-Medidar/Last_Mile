@@ -29,7 +29,7 @@ export type RolePermission = {
 export type UserRoleAssignment = {
   id: string;
   user_id: string;
-  role_id: string | null;
+  role_id: string; // Changed: role_id is NOW REQUIRED (never null)
   status: string;
   created_at: string;
   updated_at: string;
@@ -279,7 +279,8 @@ export const rolePermissionService = {
       .from("user_roles")
       .select("role_id")
       .eq("user_id", userId)
-      .eq("status", "active");
+      .eq("status", "active")
+      .not("role_id", "is", null);
 
     if (error) throw normalizeError(error);
 
