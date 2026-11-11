@@ -337,28 +337,72 @@ export const rolePermissionService = {
 
   async assignRoleToUsers(userIds: string[], roleId: string): Promise<void> {
     const uniqueUserIds = [...new Set(userIds)];
+    console.log("%c🔵 [assignRoleToUsers] Starting assignment", "color: #0066ff; font-weight: bold");
+    console.table({
+      "User count": uniqueUserIds.length,
+      "User IDs": uniqueUserIds.join(", "),
+      "Role ID": roleId,
+    });
+
     if (uniqueUserIds.length === 0) {
+      console.error("%c❌ [assignRoleToUsers] ERROR: No users provided", "color: #ff0000; font-weight: bold");
       throw new Error("Select at least one user.");
     }
 
+    console.log("%c🔵 [assignRoleToUsers] Fetching role details from database...", "color: #0066ff");
     const { data: role, error: roleError } = await supabase
       .from("roles")
       .select("id, slug, is_active")
       .eq("id", roleId)
       .single();
 
-    if (roleError) throw normalizeError(roleError);
+    if (roleError) {
+      console.error("%c❌ [assignRoleToUsers] Role fetch FAILED", "color: #ff0000; font-weight: bold");
+      console.error("Error details:", {
+        code: roleError.code,
+        message: roleError.message,
+      });
+      throw normalizeError(roleError);
+    }
+
+    console.log("%c✅ [assignRoleToUsers] Role fetched successfully", "color: #00aa00; font-weight: bold");
+    console.table({
+      "Role ID": role.id,
+      "Role Slug": role.slug,
+      "Is Active": role.is_active,
+    });
 
     if (!role.is_active) {
+      console.error("%c❌ [assignRoleToUsers] ERROR: Role is inactive", "color: #ff0000; font-weight: bold");
       throw new Error("Cannot assign an inactive role.");
     }
+
+    console.log("%c🔵 [assignRoleToUsers] About to call RPC function assign_user_role...", "color: #0066ff; font-weight: bold");
+    console.log("RPC Parameters:");
+    console.table({
+      "_user_ids": uniqueUserIds.join(", "),
+      "_role_id": role.id,
+      "role_slug": role.slug,
+    });
 
     const { error } = await supabase.rpc("assign_user_role", {
       _user_ids: uniqueUserIds,
       _role_id: role.id,
     });
 
-    if (error) throw normalizeError(error);
+    if (error) {
+      console.error("%c❌ [assignRoleToUsers] RPC CALL FAILED (400 Bad Request)", "color: #ff0000; font-weight: bold");
+      console.error("Database error details:");
+      console.table({
+        "Error Code": error.code,
+        "Error Message": error.message,
+        "Error Details": error.details || "N/A",
+        "Error Hint": error.hint || "N/A",
+      });
+      throw normalizeError(error);
+    }
+
+    console.log("%c✅ [assignRoleToUsers] SUCCESS: Role assigned to all users!", "color: #00aa00; font-weight: bold; font-size: 14px");
   },
 
   async revokeRoleFromUser(assignmentId: string): Promise<void> {
@@ -367,13 +411,33 @@ export const rolePermissionService = {
 
   async revokeUserRoles(assignmentIds: string[]): Promise<void> {
     const uniqueAssignmentIds = [...new Set(assignmentIds)];
+    console.log("%c🟠 [revokeUserRoles] Starting revocation", "color: #ff9900; font-weight: bold");
+    console.table({
+      "Assignment count": uniqueAssignmentIds.length,
+      "Assignment IDs": uniqueAssignmentIds.join(", "),
+    });
+
     if (uniqueAssignmentIds.length === 0) {
+      console.error("%c❌ [revokeUserRoles] ERROR: No assignments provided", "color: #ff0000; font-weight: bold");
       throw new Error("Select at least one role assignment.");
     }
 
+    console.log("%c🟠 [revokeUserRoles] Calling RPC function revoke_user_roles...", "color: #ff9900; font-weight: bold");
     const { error } = await supabase.rpc("revoke_user_roles", {
       _assignment_ids: uniqueAssignmentIds,
     });
-    if (error) throw normalizeError(error);
+
+    if (error) {
+      console.error("%c❌ [revokeUserRoles] RPC CALL FAILED", "color: #ff0000; font-weight: bold");
+      console.error("Database error details:");
+      console.table({
+        "Error Code": error.code,
+        "Error Message": error.message,
+        "Error Details": error.details || "N/A",
+      });
+      throw normalizeError(error);
+    }
+
+    console.log("%c✅ [revokeUserRoles] SUCCESS: Roles revoked!", "color: #00aa00; font-weight: bold; font-size: 14px");
   },
 };

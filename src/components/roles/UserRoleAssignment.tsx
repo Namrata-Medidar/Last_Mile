@@ -62,6 +62,7 @@ export function UserRoleAssignment() {
     data: roles = [],
     isLoading: rolesLoading,
     error: rolesQueryError,
+    refetch: refetchRoles,
   } = useQuery({
     queryKey: ["roles"],
     queryFn: () => rolePermissionService.getRoles(),
@@ -134,15 +135,23 @@ export function UserRoleAssignment() {
     data: assignments = [],
     isLoading: assignmentsLoading,
     error: assignmentsQueryError,
+    refetch: refetchAssignments,
   } = useQuery({
     queryKey: ["user-role-assignments"],
     enabled: permissions.can("users.tab_view"),
     queryFn: async (): Promise<UserAssignment[]> => {
+      console.log("%c📡 [useQuery] Fetching user_roles from database...", "color: #0066ff; font-weight: bold");
       const { data, error } = await supabase
         .from("user_roles")
-        .select("id, user_id, role_id, role, status, created_at");
+        .select("id, user_id, role_id, status, created_at");
 
-      if (error) throw error;
+      if (error) {
+        console.error("%c❌ [useQuery] Error fetching user_roles:", "color: #ff0000; font-weight: bold", error);
+        throw error;
+      }
+      
+      console.log("%c✅ [useQuery] Fetched user_roles data:", "color: #00cc00; font-weight: bold");
+      console.table(data);
       return (data ?? []) as UserAssignment[];
     },
   });
@@ -150,13 +159,26 @@ export function UserRoleAssignment() {
   const activeRoles = roles.filter((role) => role.is_active);
 
   const userRoleMap = useMemo(() => {
+    console.log("%c📊 [userRoleMap] Building role map...", "color: #9900ff; font-weight: bold");
+    console.log("%c📊 [userRoleMap] Active roles count:", "color: #9900ff", activeRoles.length);
+    console.table(activeRoles);
+    console.log("%c📊 [userRoleMap] Assignments count:", "color: #9900ff", assignments.length);
+    console.table(assignments);
+    
     const map = new Map<string, AppRole[]>();
 
     for (const assignment of assignments) {
       if (assignment.status !== "active") continue;
 
       const role = activeRoles.find((item) => assignmentMatchesRole(assignment, item));
-      if (!role) continue;
+      
+      if (!role) {
+        console.warn("%c⚠️ [userRoleMap] NO MATCHING ROLE FOUND for assignment:", "color: #ff9900; font-weight: bold");
+        console.log("Assignment:", assignment);
+        console.log("Looking for role_id:", assignment.role_id);
+        console.log("Available role IDs:", activeRoles.map(r => r.id));
+        continue;
+      }
 
       const existing = map.get(assignment.user_id) ?? [];
       if (!existing.some((item) => item.id === role.id)) {
@@ -164,6 +186,8 @@ export function UserRoleAssignment() {
       }
     }
 
+    console.log("%c✅ [userRoleMap] Final role map built:", "color: #00cc00; font-weight: bold");
+    console.log(map);
     return map;
   }, [assignments, activeRoles]);
 
@@ -192,11 +216,33 @@ export function UserRoleAssignment() {
 
   const saveRolesMutation = useMutation({
     mutationFn: async ({ userIds, roleIds }: { userIds: string[]; roleIds: string[] }) => {
-      if (userIds.length === 0) throw new Error("Select at least one user.");
+      console.log("%c🟢 [saveRolesMutation] STARTING MUTATION", "color: #00cc00; font-weight: bold; font-size: 14px");
+      console.table({
+        "Users to update": userIds.length,
+        "User IDs": userIds.join(", "),
+        "Roles selected": roleIds.length,
+        "Role IDs": roleIds.join(", "),
+      });
+
+      if (userIds.length === 0) {
+        console.error("%c❌ [saveRolesMutation] ERROR: No users selected", "color: #ff0000; font-weight: bold");
+        throw new Error("Select at least one user.");
+      }
 
       const currentAssignments = assignments.filter(
         (assignment) => userIds.includes(assignment.user_id) && assignment.status === "active",
       );
+      console.log("%c🟢 [saveRolesMutation] Current role assignments", "color: #00cc00");
+      console.table(
+        currentAssignments.length > 0
+          ? currentAssignments.map((a) => ({
+              "User ID": a.user_id,
+              "Role ID": a.role_id,
+              Status: a.status,
+            }))
+          : [{ "Current Assignments": "None" }],
+      );
+
       const addedRoleIds = roleIds.filter(
         (roleId) =>
           !userIds.every((userId) =>
@@ -205,16 +251,37 @@ export function UserRoleAssignment() {
             ),
           ),
       );
+      console.log("%c🟢 [saveRolesMutation] Roles to ADD", "color: #00cc00; font-weight: bold");
+      console.table(
+        addedRoleIds.length > 0
+          ? addedRoleIds.map((r) => ({ "Role ID": r }))
+          : [{ "Roles to add": "None" }],
+      );
+
       const removedAssignments = currentAssignments.filter(
         (assignment) => assignment.role_id && !roleIds.includes(assignment.role_id),
       );
+      console.log("%c🟢 [saveRolesMutation] Roles to REMOVE", "color: #ff9900; font-weight: bold");
+      console.table(
+        removedAssignments.length > 0
+          ? removedAssignments.map((a) => ({
+              "Assignment ID": a.id,
+              "User ID": a.user_id,
+              "Role ID": a.role_id,
+            }))
+          : [{ "Roles to remove": "None" }],
+      );
 
       if (addedRoleIds.length > 0 && !canAssignRoles) {
+        console.error("%c❌ [saveRolesMutation] ERROR: Missing permission to ADD roles", "color: #ff0000; font-weight: bold");
         throw new Error("Missing permission: users.role_management");
       }
       if (removedAssignments.length > 0 && !canRevokeRoles) {
+        console.error("%c❌ [saveRolesMutation] ERROR: Missing permission to REMOVE roles", "color: #ff0000; font-weight: bold");
         throw new Error("Missing permission: users.role_management");
       }
+
+      console.log("%c🟢 [saveRolesMutation] Permissions OK - Proceeding with assignment", "color: #00cc00");
 
       for (const roleId of addedRoleIds) {
         const usersToAssign = userIds.filter(
@@ -224,24 +291,31 @@ export function UserRoleAssignment() {
             ),
         );
         if (usersToAssign.length > 0) {
+          console.log(`%c🟢 [saveRolesMutation] ASSIGNING role to ${usersToAssign.length} user(s)`, "color: #00cc00; font-weight: bold");
+          console.table({
+            "Role ID": roleId,
+            "Users to assign": usersToAssign.length,
+            "User IDs": usersToAssign.join(", "),
+          });
           await rolePermissionService.assignRoleToUsers(usersToAssign, roleId);
         }
       }
 
       if (removedAssignments.length > 0) {
+        console.log(`%c🟢 [saveRolesMutation] REMOVING ${removedAssignments.length} role assignment(s)`, "color: #ff9900; font-weight: bold");
         await rolePermissionService.revokeUserRoles(
           removedAssignments.map((assignment) => assignment.id),
         );
       }
+
+      console.log("%c✅ [saveRolesMutation] ALL ROLE UPDATES COMPLETED SUCCESSFULLY!", "color: #00aa00; font-weight: bold; font-size: 14px");
     },
     onSuccess: async () => {
-      setSelectedUserIds((current) =>
-        current.filter((userId) => !roleDialogUserIds.includes(userId)),
-      );
-      setRoleDialogUserIds([]);
-      setSelectedRoleIds([]);
-      setRoleDialogOpen(false);
-      setNotice("User roles updated successfully.");
+      console.log("%c✅ [saveRolesMutation] SUCCESS: Role changes saved", "color: #00aa00; font-weight: bold; font-size: 14px");
+      
+      // Clear cache and force refetch
+      console.log("%c🔄 [saveRolesMutation] Starting cache invalidation and refetch...", "color: #ff6600; font-weight: bold; font-size: 12px");
+      
       await queryClient.invalidateQueries({ queryKey: ["user-role-names"] });
       await queryClient.invalidateQueries({
         queryKey: ["user-role-assignments"],
@@ -249,8 +323,51 @@ export function UserRoleAssignment() {
       await queryClient.invalidateQueries({ queryKey: ["role-assignment-people"] });
       await queryClient.invalidateQueries({ queryKey: ["engineers"] });
       await queryClient.invalidateQueries({ queryKey: ["user-profiles"] });
+      
+      // Force immediate refetch with await
+      console.log("%c🔄 [saveRolesMutation] Calling refetchAssignments()...", "color: #ff6600; font-weight: bold");
+      const assignmentsResult = await refetchAssignments();
+      console.log("%c✅ [saveRolesMutation] refetchAssignments() result:", "color: #00cc00; font-weight: bold");
+      console.log("Fetched assignments:", assignmentsResult.data);
+      
+      // IMPORTANT: Log which user/role combinations came back
+      if (assignmentsResult.data) {
+        const roleDialogUserAssignments = assignmentsResult.data.filter(a => 
+          roleDialogUserIds.includes(a.user_id) && a.status === 'active'
+        );
+        console.log("%c🔍 [saveRolesMutation] Assignments for the user we just updated:", "color: #ff00ff; font-weight: bold; font-size: 14px");
+        console.table(roleDialogUserAssignments.length > 0 
+          ? roleDialogUserAssignments.map(a => ({
+              "User ID": a.user_id,
+              "Role ID": a.role_id,
+              "Status": a.status,
+              "Created At": a.created_at
+            }))
+          : [{ "Note": "No active assignments found for this user!" }]
+        );
+      }
+      
+      console.log("%c🔄 [saveRolesMutation] Calling refetchRoles()...", "color: #ff6600; font-weight: bold");
+      const rolesResult = await refetchRoles();
+      console.log("%c✅ [saveRolesMutation] refetchRoles() result:", "color: #00cc00; font-weight: bold");
+      console.log(rolesResult.data);
+      
+      // Small delay to ensure React has processed the state updates
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      console.log("%c🔄 [saveRolesMutation] Clearing dialog state...", "color: #ff6600; font-weight: bold");
+      setSelectedUserIds((current) =>
+        current.filter((userId) => !roleDialogUserIds.includes(userId)),
+      );
+      setRoleDialogUserIds([]);
+      setSelectedRoleIds([]);
+      setRoleDialogOpen(false);
+      setNotice("User roles updated successfully.");
     },
     onError: (error: Error) => {
+      console.error("%c❌ [saveRolesMutation] FAILED: Error during role update", "color: #ff0000; font-weight: bold; font-size: 14px");
+      console.error("Error message:", error.message);
+      console.error("Stack trace:", error.stack);
       setNotice(error.message);
       void queryClient.invalidateQueries({ queryKey: ["user-role-assignments"] });
     },
@@ -504,6 +621,10 @@ export function UserRoleAssignment() {
                 <tbody className="divide-y divide-gray-100">
                   {filteredUsers.map((user) => {
                     const assignedRoles = userRoleMap.get(user.id) ?? [];
+                    if (assignedRoles.length > 0) {
+                      console.log(`%c📍 User: ${user.email}`, "color: #0066ff; font-weight: bold");
+                      console.log(`Assigned roles:`, assignedRoles);
+                    }
                     return (
                       <tr key={user.id} className="hover:bg-gray-50">
                         <td className="px-3 py-4">
@@ -696,12 +817,23 @@ export function UserRoleAssignment() {
             <button
               type="button"
               disabled={saveRolesMutation.isPending}
-              onClick={() =>
+              onClick={() => {
+                console.log("%c🔴 ════════════════════════════════════════", "color: #ff0000; font-weight: bold; font-size: 12px");
+                console.log("%c🔴 [SAVE BUTTON CLICKED] - Initiating role assignment", "color: #ff0000; font-weight: bold; font-size: 14px");
+                console.log("%c🔴 ════════════════════════════════════════", "color: #ff0000; font-weight: bold; font-size: 12px");
+                console.table({
+                  "Button State": saveRolesMutation.isPending ? "LOADING" : "READY",
+                  "Users selected": roleDialogUserIds.length,
+                  "User IDs": roleDialogUserIds.join(", "),
+                  "Roles selected": selectedRoleIds.length,
+                  "Role IDs": selectedRoleIds.join(", "),
+                });
+                console.log("%c🔴 Sending mutation request...", "color: #ff0000; font-weight: bold");
                 saveRolesMutation.mutate({
                   userIds: roleDialogUserIds,
                   roleIds: selectedRoleIds,
-                })
-              }
+                });
+              }}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saveRolesMutation.isPending ? "Saving..." : "Save roles"}
