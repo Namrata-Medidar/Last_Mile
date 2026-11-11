@@ -30,6 +30,7 @@ import { ProjectSettings } from "@/components/project/ProjectSettings";
 import type { CatalogService } from "@/services/catalogService";
 import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
+import { attachmentService } from "@/services/attachmentService";
 import {
   cancellationPolicyQuery,
   type CancellationPolicy,
@@ -246,7 +247,10 @@ export function App({
     void navigate({ to: "/" });
   };
 
-  const createTicket = async (nextBooking: NewBooking) => {
+  const createTicket = async ({
+    attachments = [],
+    ...nextBooking
+  }: NewBooking & { attachments?: File[] }) => {
     if (!userId) {
       void navigate({ to: "/auth", search: { redirect: "/booking" } });
       return;
@@ -270,6 +274,21 @@ export function App({
         { ...nextBooking, clientRequestId: requestId },
         auth.profile ?? {},
       );
+      const uploads = await Promise.allSettled(
+        attachments.map((file) => attachmentService.upload(ticket.dbId, file)),
+      );
+      const failedUploads = uploads.flatMap((result, index) =>
+        result.status === "rejected"
+          ? [
+              `${attachments[index].name}: ${result.reason instanceof Error ? result.reason.message : "Upload failed"}`,
+            ]
+          : [],
+      );
+      if (failedUploads.length > 0) {
+        toast.error(
+          `Booking ${ticket.id} was saved, but some attachments could not be uploaded. Retry these files from My Orders. ${failedUploads.join("; ")}`,
+        );
+      }
       const nextFlow: BookingFlow = {
         userId,
         booking: nextBooking,
