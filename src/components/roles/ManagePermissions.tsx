@@ -29,6 +29,7 @@ const PERMISSION_DISPLAY_NAMES: Record<string, string> = {
   "tickets.edit": "Edit Tickets",
   "ticket.addassignee": "Add Engineers to Tickets",
   "ticket.close": "Close Tickets",
+  "ticket.soft_delete": "Delete Tickets (Soft Delete)",
   "roles.create": "Add Role button visibility",
   "roles.manage_permissions": "Manage Permissions",
   "roles.deactivate": "Delete Role (soft delete)",
@@ -91,8 +92,8 @@ const PERMISSION_ACTIONS: PermissionAction[] = ["View", "Add", "Edit", "Delete"]
 
 function getPermissionAction(permission: AppPermission): PermissionAction {
   if (permission.code === "tickets.edit") return "Edit";
-  if (permission.code === "ticket.addassignee" || permission.code === "ticket.close")
-    return "Other";
+  if (permission.code === "ticket.addassignee" || permission.code === "ticket.close" || permission.code === "ticket.soft_delete")
+    return "Delete";
   if (permission.code === "roles.create") return "Add";
   if (permission.code === "roles.tab_view") return "View";
   if (permission.code === "roles.edit") return "Edit";

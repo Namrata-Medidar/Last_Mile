@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from "react";
+import { useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -11,6 +12,7 @@ import {
   Paperclip,
   Phone,
   ReceiptText,
+  Trash2,
   UserRound,
   Users,
 } from "lucide-react";
@@ -129,6 +131,8 @@ type MyBookingDetailsProps = {
   updateTicket: (update: TicketUpdate, action?: UpdateAction) => Promise<boolean>;
   recordCall: () => void;
   onNotify?: (notification: { title: string; detail: string }) => void;
+  canSoftDeleteTicket?: boolean;
+  onSoftDeleteTicket?: (ticketId: string) => Promise<void>;
   activeTab: BookingTab;
   setActiveTab: Dispatch<SetStateAction<BookingTab>>;
   selectedMessages: { public: Comment[]; internal: Comment[] };
@@ -171,6 +175,8 @@ export function MyBookingDetails({
   canEditTickets,
   canAddAssignee,
   canCloseTicket,
+  canSoftDeleteTicket = false,
+  onSoftDeleteTicket,
   selectedEngineerId,
   setAssigneeEngineerId,
   assignableEngineers,
@@ -196,6 +202,8 @@ export function MyBookingDetails({
   onAddFiles,
   onDownloadAttachment,
 }: MyBookingDetailsProps) {
+  const [softDeleteDialogOpen, setSoftDeleteDialogOpen] = useState(false);
+
   const cancellationFeeDue = Boolean(
     cancellationPolicy &&
     cancellationFeeApplies(cancellationPolicy, {
@@ -396,6 +404,47 @@ export function MyBookingDetails({
                 <CheckCircle2 />
                 Close ticket
               </Button>
+            )}
+            {canSoftDeleteTicket && ticket.dbId && (
+              <AlertDialog open={softDeleteDialogOpen} onOpenChange={setSoftDeleteDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 gap-2 rounded-md px-3 text-xs text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this ticket?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action will permanently delete the ticket. This cannot be undone. Are you sure?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <Button
+                      variant="destructive"
+                      onClick={async () => {
+                        try {
+                          await onSoftDeleteTicket?.(ticket.dbId);
+                          toast.success("Ticket deleted successfully.");
+                          setSoftDeleteDialogOpen(false);
+                          onNotify?.({ title: "Ticket deleted", detail: `${ticket.id} has been deleted` });
+                        } catch (error) {
+                          const message = error instanceof Error ? error.message : "Failed to delete ticket";
+                          toast.error(`Delete failed: ${message}`);
+                        }
+                      }}
+                    >
+                      Delete ticket
+                    </Button>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
         )}

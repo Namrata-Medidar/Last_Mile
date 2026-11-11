@@ -369,6 +369,17 @@ export function App({
     return messageError;
   };
 
+  const softDeleteTicket = async (ticketId: string): Promise<void> => {
+    if (!permissions.can("ticket.soft_delete")) {
+      throw new Error("You don't have permission to delete tickets.");
+    }
+    const ticket = customerTickets.find((item) => item.dbId === ticketId);
+    if (!ticket)
+      throw new Error("Could not find this booking. Refresh and try again.");
+    await bookingService.softDelete(ticket.dbId);
+    await refreshTickets();
+  };
+
   const addComment = async (ticketNo: string, visibility: "public" | "internal", text: string) => {
     if (isProjectPage && !permissions.can("tickets.edit")) {
       toast.error("You don’t have permission to update tickets.");
@@ -665,6 +676,8 @@ export function App({
           canEditTickets={canEditTickets}
           canAddAssignee={permissions.can("ticket.addassignee")}
           canCloseTicket={permissions.can("ticket.close")}
+          canSoftDeleteTicket={permissions.can("ticket.soft_delete")}
+          onSoftDeleteTicket={softDeleteTicket}
           showDashboard={projectSection === "dashboard"}
           showTickets={projectSection === "tickets"}
           onNotify={addNotification}

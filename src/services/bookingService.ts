@@ -141,6 +141,7 @@ export const ticketsQuery = (userId: string | null) =>
         .select(
           "id, customer_id, ticket_no, title, status, priority, engineer_id, engineer_name, engineer_phone, updated_at, created_at, city, customer_name, progress, last_contact, total, customer_rating, details",
         )
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -275,6 +276,12 @@ export const bookingService = {
   },
   async cancel(dbId: string): Promise<void> {
     const { error } = await supabase.rpc("cancel_my_booking", {
+      _booking_id: dbId,
+    });
+    if (error) throw error;
+  },
+  async softDelete(dbId: string): Promise<void> {
+    const { error } = await supabase.rpc("soft_delete_booking", {
       _booking_id: dbId,
     });
     if (error) throw error;

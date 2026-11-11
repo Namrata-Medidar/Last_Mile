@@ -32,6 +32,8 @@ export function MyBookings({
   canEditTickets = true,
   canAddAssignee = false,
   canCloseTicket = false,
+  canSoftDeleteTicket = false,
+  onSoftDeleteTicket,
   comments,
   commentsError,
   loading = false,
@@ -57,6 +59,8 @@ export function MyBookings({
   canAddAssignee?: boolean;
   canCloseTicket?: boolean;
   canEditTickets?: boolean;
+  canSoftDeleteTicket?: boolean;
+  onSoftDeleteTicket?: (ticketId: string) => Promise<void>;
   comments?: CommentsByTicket | undefined;
   commentsError?: string | null;
   loading?: boolean;
@@ -418,6 +422,8 @@ export function MyBookings({
               canEditTickets={canEditTickets}
               canAddAssignee={canAddAssignee}
               canCloseTicket={canCloseTicket}
+              canSoftDeleteTicket={canSoftDeleteTicket}
+              onSoftDeleteTicket={onSoftDeleteTicket}
               selectedEngineerId={selectedEngineerId}
               setAssigneeEngineerId={setAssigneeEngineerId}
               assignableEngineers={assignableEngineers}
